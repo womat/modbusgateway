@@ -1,0 +1,30 @@
+# webserver configuration
+webserver:
+  active: yes
+  port:   8080
+
+# enable/disable webservices
+webservices:
+  version:     true
+  presetMultipleRegisters: true
+
+# enable debugging and log path
+debug:
+  active: yes
+  path:   ./ #/var/log/uxsol
+
+IsQuiet: no
+
+modbusclient:
+  # connection eg: TCP 192.168.65.197:502  DeviceId:1 Timeout:500
+  # connection eg: RTU com4,9600,8,N,1 DeviceId:1 Timeout:1000
+  # Timeout in ms (default 1000ms)
+  # DeviceId default 1
+  connection: TCP 192.168.65.197:502 DeviceId:2 Timeout:2000
+  #connection: RTU com4,9600,8,N,1 DeviceId:1 Timeout:1500
+
+  permitted:
+    #- ^TCP 192\.168\.65\.197:502
+    #- ^RTU com4
+    #- ^ASCII|^RTU tty[0-9]{1,2},
+    #- ^TCP 192\.168\.65\.[0-9]{1,3}:[0-9]{1,5}
