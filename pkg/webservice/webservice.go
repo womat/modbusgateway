@@ -110,7 +110,7 @@ func httpReadHoldingRegisters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("ReadHoldingRegisters from %v, quantity %v (%v)", address, quantity, connection)
+	log.Printf("ReadHoldingRegisters from address %v, quantity %v (%v)", address, quantity, connection)
 
 	var d mbclient.ClientData
 
@@ -146,11 +146,11 @@ func httpReadHoldingRegisters(w http.ResponseWriter, r *http.Request) {
 	select {
 	case d = <-request.Data:
 		if d.Error != nil {
-			log.Printf("Error to receive Modbus Client Data: %v", d.Error)
+			log.Printf("Error receiving Modbus client data: %v", d.Error)
 			return
 		}
 	case <-timeOut.C:
-		log.Printf("Error to receive Modbus Client Data: Timeout")
+		log.Printf("Error receiving Modbus client data: Timeout")
 		return
 	}
 

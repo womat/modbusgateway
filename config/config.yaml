@@ -24,6 +24,7 @@ modbusclient:
   #connection: RTU com4,9600,8,N,1 DeviceId:1 Timeout:1500
 
   permitted:
+   - ^TCP 127\.0\.0\.1:502
     #- ^TCP 192\.168\.65\.197:502
     #- ^RTU com4
     #- ^ASCII|^RTU tty[0-9]{1,2},
