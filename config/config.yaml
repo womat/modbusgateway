@@ -6,7 +6,7 @@ webserver:
 # enable/disable webservices
 webservices:
   version:     true
-  presetMultipleRegisters: true
+  readholdingregisters: true
 
 # enable debugging and log path
 debug:

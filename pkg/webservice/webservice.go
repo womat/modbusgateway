@@ -36,8 +36,8 @@ func InitWebService() (err error) {
 	if version := global.Options.Webservices.Version; version {
 		http.HandleFunc("/version", httpGetVersion)
 	}
-	if version := global.Options.Webservices.PresetMultipleRegisters; version {
-		http.HandleFunc("/ReadHoldingRegisters", httpReadHoldingRegisters)
+	if version := global.Options.Webservices.ReadHoldingRegisters; version {
+		http.HandleFunc("/readholdingregisters", httpReadHoldingRegisters)
 	}
 	go http.ListenAndServe(port, nil)
 	return

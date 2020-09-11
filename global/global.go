@@ -15,7 +15,7 @@ import (
 //
 // VERSION differs from semantic versioning as described in https://semver.org/
 // but we keep the correct syntax.
-const VERSION = "1.0.9+20200906"
+const VERSION = "1.0.10+20200911"
 
 type ModbusClient struct {
 	Connection string
@@ -30,8 +30,8 @@ type ConfigOptions struct {
 		Port   string
 	}
 	Webservices struct {
-		Version                 bool
-		PresetMultipleRegisters bool
+		Version              bool
+		ReadHoldingRegisters bool
 	}
 	Debug struct {
 		Active bool
