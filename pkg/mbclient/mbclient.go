@@ -213,6 +213,7 @@ func (c *Client) Clientd() {
 			return
 		}()
 
+		//TODO Wiederholung im Fehlerfall
 		select {
 		case request.Data <- ClientData{
 			Timestamp: time.Now(),
