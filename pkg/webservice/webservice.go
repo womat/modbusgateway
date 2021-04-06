@@ -64,7 +64,7 @@ func httpReadHoldingRegisters(w http.ResponseWriter, r *http.Request) {
 	var err error
 	//	start := time.Now()
 
-	getUrlQuery := func(s string) (i int, err error) {
+	getURLQuery := func(s string) (i int, err error) {
 		var urlParam []string
 
 		if urlParam, ok = r.URL.Query()[s]; !ok || len(urlParam[0]) < 1 {
@@ -73,20 +73,20 @@ func httpReadHoldingRegisters(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if i, err = strconv.Atoi(urlParam[0]); err != nil {
-			err = fmt.Errorf("Value does'nt look like a number (%q).\n", urlParam[0])
+			err = fmt.Errorf("value does'nt look like a number (%q)", urlParam[0])
 			return
 		}
 		return
 	}
 
-	if address, err = getUrlQuery("Address"); err != nil {
-		if address, err = getUrlQuery("Register"); err != nil {
+	if address, err = getURLQuery("Address"); err != nil {
+		if address, err = getURLQuery("Register"); err != nil {
 			log.Printf("Url Param Register resp. Address is missing or wrong: %v\n", err)
 			return
 		}
-		address -= 1
+		address--
 	}
-	if quantity, err = getUrlQuery("Quantity"); err != nil {
+	if quantity, err = getURLQuery("Quantity"); err != nil {
 		log.Printf("Url Param Quantity is missing or wrong: %v\n", err)
 		return
 	}
@@ -136,7 +136,7 @@ func httpReadHoldingRegisters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//so that the timeout doesn't precede from the timeout of the request, 100ms are added to the timeout
+	// so that the timeout doesn't precede from the timeout of the request, 100ms are added to the timeout
 	timeOut := time.NewTimer(getTimeOut(connection) + time.Second)
 	defer timeOut.Stop()
 

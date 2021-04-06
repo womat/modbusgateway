@@ -40,8 +40,7 @@ func Init() {
 	}
 
 	global.Clientd = mbclient.NewClient()
-	global.Clientd.Start()
-	return
+	_ = global.Clientd.Start()
 }
 
 func loadConfig() (c global.ConfigOptions, err error) {

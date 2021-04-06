@@ -76,7 +76,7 @@ func (c *Client) Clientd() {
 			switch {
 			case field == "RTU", field == "TCP", field == "ASCII":
 				param["Type"] = field
-				//RTU & ASCII
+				// RTU & ASCII
 			case regexp.MustCompile(`^[0-9A-Za-z:./-]*,[0-9]{1,5},[5678],[NEO],[12]$`).MatchString(field):
 				param["connection"] = field
 				// TCP
@@ -113,7 +113,7 @@ func (c *Client) Clientd() {
 		if _, ok := param["connection"]; !ok {
 			request.Data <- ClientData{
 				Timestamp: time.Now(),
-				Runtime:   time.Now().Sub(start),
+				Runtime:   time.Since(start),
 				Error:     fmt.Errorf("invalid connection string parameter: '%v'", request.Connection),
 			}
 
@@ -128,7 +128,7 @@ func (c *Client) Clientd() {
 			ch := make(chan bool, 1)
 			defer close(ch)
 
-			//so that the timeout doesn't precede from the timeout of the client handler, 100ms are added to the timeout
+			// so that the timeout doesn't precede from the timeout of the client handler, 100ms are added to the timeout
 			timeOut := time.NewTimer(param["Timeout"].(time.Duration) + time.Millisecond*100)
 			defer timeOut.Stop()
 
@@ -201,7 +201,6 @@ func (c *Client) Clientd() {
 				}
 
 				data, err = client.ReadHoldingRegisters(request.Address, request.Quantity)
-				return
 			}()
 
 			// wait for Modbus Data
@@ -210,14 +209,13 @@ func (c *Client) Clientd() {
 			case <-timeOut.C:
 				err = fmt.Errorf("timeout")
 			}
-			return
 		}()
 
-		//TODO Wiederholung im Fehlerfall
+		// TODO repeat on error
 		select {
 		case request.Data <- ClientData{
 			Timestamp: time.Now(),
-			Runtime:   time.Now().Sub(start),
+			Runtime:   time.Since(start),
 			Error:     err,
 			Data:      data,
 		}:

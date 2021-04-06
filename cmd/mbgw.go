@@ -5,8 +5,6 @@ import (
 )
 
 func main() {
-
 	config.Init()
-
 	select {}
 }
