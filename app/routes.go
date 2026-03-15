@@ -46,16 +46,16 @@ func (app *App) SetupRoutes() {
 	mux.Handle("GET /devices/{device}/status", web.WithAuth(app.HandleModbusGetDeviceStatus(), webCfg))
 
 	// Modbus read routes
-	mux.Handle("GET /devices/{device}/coils/{register}", web.WithAuth(app.HandleModbusReadCoils(), webCfg))                        // Function code 1: Read Coils
-	mux.Handle("GET /devices/{device}/discrete-inputs/{register}", web.WithAuth(app.HandleModbusReadDiscreteInputs(), webCfg))     // Function code 2: Read Discrete Inputs
-	mux.Handle("GET /devices/{device}/holding-registers/{register}", web.WithAuth(app.HandleModbusReadHoldingRegisters(), webCfg)) // Function code 3: Read Holding Registers
-	mux.Handle("GET /devices/{device}/input-registers/{register}", web.WithAuth(app.HandleModbusReadInputRegisters(), webCfg))     // Function code 4: Read Input Registers
+	mux.Handle("GET /devices/{device}/coils/{address}", web.WithAuth(app.HandleModbusReadCoils(), webCfg))                        // Function code 1: Read Coils
+	mux.Handle("GET /devices/{device}/discrete-inputs/{address}", web.WithAuth(app.HandleModbusReadDiscreteInputs(), webCfg))     // Function code 2: Read Discrete Inputs
+	mux.Handle("GET /devices/{device}/holding-registers/{address}", web.WithAuth(app.HandleModbusReadHoldingRegisters(), webCfg)) // Function code 3: Read Holding Registers
+	mux.Handle("GET /devices/{device}/input-registers/{address}", web.WithAuth(app.HandleModbusReadInputRegisters(), webCfg))     // Function code 4: Read Input Registers
 
 	// Modbus write routes
-	mux.Handle("POST /devices/{device}/coils/{register}", web.WithAuth(app.HandleModbusWriteSingleCoil(), webCfg))                 // Function code 5: Write Single Coil
-	mux.Handle("POST /devices/{device}/holding-registers/{register}", web.WithAuth(app.HandleModbusWriteSingleRegister(), webCfg)) // Function code 6: Write Single Register
-	mux.Handle("POST /devices/{device}/coils", web.WithAuth(app.HandleModbusWriteMultipleCoils(), webCfg))                         // Function code 15: Write Multiple Coils
-	mux.Handle("POST /devices/{device}/holding-registers", web.WithAuth(app.HandleModbusWriteMultipleRegisters(), webCfg))         // Function code 16: Write Multiple Registers
+	mux.Handle("POST /devices/{device}/coils/{address}", web.WithAuth(app.HandleModbusWriteSingleCoil(), webCfg))                 // Function code 5: Write Single Coil
+	mux.Handle("POST /devices/{device}/holding-registers/{address}", web.WithAuth(app.HandleModbusWriteSingleRegister(), webCfg)) // Function code 6: Write Single Register
+	mux.Handle("POST /devices/{device}/coils", web.WithAuth(app.HandleModbusWriteMultipleCoils(), webCfg))                        // Function code 15: Write Multiple Coils
+	mux.Handle("POST /devices/{device}/holding-registers", web.WithAuth(app.HandleModbusWriteMultipleRegisters(), webCfg))        // Function code 16: Write Multiple Registers
 
 	// Apply global middleware: CORS + IP filter
 	handler := web.WithCORS(mux)

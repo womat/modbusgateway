@@ -62,7 +62,7 @@ modbusServer:
 # Modbus devices exposed through the API
 # =============================================================================
 # Each top-level key under devices is the public device name used by the API,
-# e.g. GET /devices/fronius-smartmeter/input-registers/30001?length=2
+# e.g. GET /devices/fronius-smartmeter/input-registers/30001?quantity=2
 #
 # Common fields:
 # - description: free-text label for humans

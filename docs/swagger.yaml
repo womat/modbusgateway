@@ -6,7 +6,7 @@ definitions:
     type: object
   app.ModbusWriteMultipleCoilsRequest:
     properties:
-      register:
+      address:
         type: integer
       values:
         items:
@@ -15,7 +15,7 @@ definitions:
     type: object
   app.ModbusWriteMultipleRegistersRequest:
     properties:
-      register:
+      address:
         type: integer
       values:
         items:
@@ -73,8 +73,6 @@ definitions:
         type: string
       device:
         type: string
-      deviceId:
-        type: integer
       lastConnectAt:
         type: string
       lastError:
@@ -85,65 +83,71 @@ definitions:
         type: string
       transport:
         type: string
+      unitId:
+        type: integer
     type: object
   modbusclient.ReadBitsResponse:
     properties:
+      address:
+        type: integer
+      addressHex:
+        type: string
       dataHex:
         type: string
       device:
         type: string
-      deviceId:
-        type: integer
+      duration:
+        type: number
       functionCode:
         type: integer
-      length:
-        type: integer
-      register:
+      quantity:
         type: integer
       transport:
         type: string
-      values:
-        items:
-          type: boolean
-        type: array
+      unitId:
+        type: integer
     type: object
   modbusclient.ReadRegistersResponse:
     properties:
+      address:
+        type: integer
+      addressHex:
+        type: string
       dataHex:
         type: string
       device:
         type: string
-      deviceId:
-        type: integer
+      duration:
+        type: number
       functionCode:
         type: integer
-      length:
-        type: integer
-      register:
+      quantity:
         type: integer
       transport:
         type: string
-      values:
-        items:
-          type: integer
-        type: array
+      unitId:
+        type: integer
     type: object
   modbusclient.WriteResponse:
     properties:
+      address:
+        type: integer
+      addressHex:
+        type: string
       dataHex:
         type: string
       device:
         type: string
-      deviceId:
-        type: integer
+      duration:
+        type: number
       functionCode:
         type: integer
-      length:
-        type: integer
-      register:
+      quantity:
         type: integer
       transport:
         type: string
+      unitId:
+        type: integer
     type: object
 info:
   contact: {}
@@ -215,7 +219,7 @@ paths:
       summary: 'FC 15: Write multiple coils'
       tags:
       - modbus
-  /devices/{device}/coils/{register}:
+  /devices/{device}/coils/{address}:
     get:
       description: Reads one or more coils from a configured Modbus device.
       parameters:
@@ -224,15 +228,15 @@ paths:
         name: device
         required: true
         type: string
-      - description: Start register/address
+      - description: Start address (decimal or 0x-prefixed hex)
         in: path
-        name: register
+        name: address
         required: true
-        type: integer
+        type: string
       - default: 1
         description: Number of values to read
         in: query
-        name: length
+        name: quantity
         type: integer
       produces:
       - application/json
@@ -268,11 +272,11 @@ paths:
         name: device
         required: true
         type: string
-      - description: Target register/address
+      - description: Target address (decimal or 0x-prefixed hex)
         in: path
-        name: register
+        name: address
         required: true
-        type: integer
+        type: string
       - description: Single coil write request
         in: body
         name: request
@@ -303,7 +307,7 @@ paths:
       summary: 'FC 5: Write single coil'
       tags:
       - modbus
-  /devices/{device}/discrete-inputs/{register}:
+  /devices/{device}/discrete-inputs/{address}:
     get:
       description: Reads one or more discrete inputs from a configured Modbus device.
       parameters:
@@ -312,15 +316,15 @@ paths:
         name: device
         required: true
         type: string
-      - description: Start register/address
+      - description: Start address (decimal or 0x-prefixed hex)
         in: path
-        name: register
+        name: address
         required: true
-        type: integer
+        type: string
       - default: 1
         description: Number of values to read
         in: query
-        name: length
+        name: quantity
         type: integer
       produces:
       - application/json
@@ -387,7 +391,7 @@ paths:
       summary: 'FC 16: Write multiple holding registers'
       tags:
       - modbus
-  /devices/{device}/holding-registers/{register}:
+  /devices/{device}/holding-registers/{address}:
     get:
       description: Reads one or more holding registers from a configured Modbus device.
       parameters:
@@ -396,15 +400,15 @@ paths:
         name: device
         required: true
         type: string
-      - description: Start register/address
+      - description: Start address (decimal or 0x-prefixed hex)
         in: path
-        name: register
+        name: address
         required: true
-        type: integer
+        type: string
       - default: 1
         description: Number of values to read
         in: query
-        name: length
+        name: quantity
         type: integer
       produces:
       - application/json
@@ -440,11 +444,11 @@ paths:
         name: device
         required: true
         type: string
-      - description: Target register/address
+      - description: Target address (decimal or 0x-prefixed hex)
         in: path
-        name: register
+        name: address
         required: true
-        type: integer
+        type: string
       - description: Single register write request
         in: body
         name: request
@@ -475,7 +479,7 @@ paths:
       summary: 'FC 6: Write single holding register'
       tags:
       - modbus
-  /devices/{device}/input-registers/{register}:
+  /devices/{device}/input-registers/{address}:
     get:
       description: Reads one or more input registers from a configured Modbus device.
       parameters:
@@ -484,15 +488,15 @@ paths:
         name: device
         required: true
         type: string
-      - description: Start register/address
+      - description: Start address (decimal or 0x-prefixed hex)
         in: path
-        name: register
+        name: address
         required: true
-        type: integer
+        type: string
       - default: 1
         description: Number of values to read
         in: query
-        name: length
+        name: quantity
         type: integer
       produces:
       - application/json

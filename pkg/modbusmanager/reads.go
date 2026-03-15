@@ -22,6 +22,7 @@ type ReadBitsResult struct {
 	Length   uint16
 	Data     []byte
 	Values   []bool
+	Duration time.Duration
 }
 
 // ReadRegistersResult contains the normalized raw result for FC3 or FC4 reads.
@@ -31,11 +32,12 @@ type ReadRegistersResult struct {
 	Length   uint16
 	Data     []byte
 	Values   []uint16
+	Duration time.Duration
 }
 
 // ReadCoils executes a FC1 read against a managed device connection.
 func (m *Manager) ReadCoils(deviceName string, register, length uint16) (ReadBitsResult, error) {
-	values, device, err := m.readBits(deviceName, register, length, 2000, func(client *simonmodbus.ModbusClient) ([]bool, error) {
+	values, device, duration, err := m.readBits(deviceName, length, 2000, func(client *simonmodbus.ModbusClient) ([]bool, error) {
 		return client.ReadCoils(register, length)
 	})
 	if err != nil {
@@ -48,12 +50,13 @@ func (m *Manager) ReadCoils(deviceName string, register, length uint16) (ReadBit
 		Length:   length,
 		Data:     packCoilValues(values),
 		Values:   values,
+		Duration: duration,
 	}, nil
 }
 
 // ReadDiscreteInputs executes a FC2 read against a managed device connection.
 func (m *Manager) ReadDiscreteInputs(deviceName string, register, length uint16) (ReadBitsResult, error) {
-	values, device, err := m.readBits(deviceName, register, length, 2000, func(client *simonmodbus.ModbusClient) ([]bool, error) {
+	values, device, duration, err := m.readBits(deviceName, length, 2000, func(client *simonmodbus.ModbusClient) ([]bool, error) {
 		return client.ReadDiscreteInputs(register, length)
 	})
 	if err != nil {
@@ -66,12 +69,13 @@ func (m *Manager) ReadDiscreteInputs(deviceName string, register, length uint16)
 		Length:   length,
 		Data:     packCoilValues(values),
 		Values:   values,
+		Duration: duration,
 	}, nil
 }
 
 // ReadHoldingRegisters executes a FC3 read against a managed device connection.
 func (m *Manager) ReadHoldingRegisters(deviceName string, register, length uint16) (ReadRegistersResult, error) {
-	data, device, err := m.readRegisterBytes(deviceName, register, length, 125, func(client *simonmodbus.ModbusClient) ([]byte, error) {
+	data, device, duration, err := m.readRegisterBytes(deviceName, length, 125, func(client *simonmodbus.ModbusClient) ([]byte, error) {
 		return client.ReadRawBytes(register, length*2, simonmodbus.HOLDING_REGISTER)
 	})
 	if err != nil {
@@ -84,12 +88,13 @@ func (m *Manager) ReadHoldingRegisters(deviceName string, register, length uint1
 		Length:   length,
 		Data:     data,
 		Values:   decodeRegisterValues(data),
+		Duration: duration,
 	}, nil
 }
 
 // ReadInputRegisters executes a FC4 read against a managed device connection.
 func (m *Manager) ReadInputRegisters(deviceName string, register, length uint16) (ReadRegistersResult, error) {
-	data, device, err := m.readRegisterBytes(deviceName, register, length, 125, func(client *simonmodbus.ModbusClient) ([]byte, error) {
+	data, device, duration, err := m.readRegisterBytes(deviceName, length, 125, func(client *simonmodbus.ModbusClient) ([]byte, error) {
 		return client.ReadRawBytes(register, length*2, simonmodbus.INPUT_REGISTER)
 	})
 	if err != nil {
@@ -102,66 +107,68 @@ func (m *Manager) ReadInputRegisters(deviceName string, register, length uint16)
 		Length:   length,
 		Data:     data,
 		Values:   decodeRegisterValues(data),
+		Duration: duration,
 	}, nil
 }
 
-func (m *Manager) readBits(deviceName string, register, length, maxLength uint16, op func(*simonmodbus.ModbusClient) ([]bool, error)) ([]bool, *managedDevice, error) {
+func (m *Manager) readBits(deviceName string, length, maxLength uint16, op func(*simonmodbus.ModbusClient) ([]bool, error)) ([]bool, *managedDevice, time.Duration, error) {
 	if length == 0 {
-		return nil, nil, ErrLengthMustBeGreaterThanZero
+		return nil, nil, 0, ErrLengthMustBeGreaterThanZero
 	}
 	if length > maxLength {
-		return nil, nil, fmt.Errorf("%w: max=%d", ErrLengthExceedsBitLimit, maxLength)
+		return nil, nil, 0, fmt.Errorf("%w: max=%d", ErrLengthExceedsBitLimit, maxLength)
 	}
 
 	device, err := m.getDevice(deviceName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	values, err := device.executeReadBits(op)
+	values, duration, err := device.executeReadBits(op)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	return values, device, nil
+	return values, device, duration, nil
 }
 
-func (m *Manager) readRegisterBytes(deviceName string, register, length, maxLength uint16, op func(*simonmodbus.ModbusClient) ([]byte, error)) ([]byte, *managedDevice, error) {
+func (m *Manager) readRegisterBytes(deviceName string, length, maxLength uint16, op func(*simonmodbus.ModbusClient) ([]byte, error)) ([]byte, *managedDevice, time.Duration, error) {
 	if length == 0 {
-		return nil, nil, ErrLengthMustBeGreaterThanZero
+		return nil, nil, 0, ErrLengthMustBeGreaterThanZero
 	}
 	if length > maxLength {
-		return nil, nil, fmt.Errorf("%w: max=%d", ErrLengthExceedsRegisterLimit, maxLength)
+		return nil, nil, 0, fmt.Errorf("%w: max=%d", ErrLengthExceedsRegisterLimit, maxLength)
 	}
 
 	device, err := m.getDevice(deviceName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	data, err := device.executeReadRegisters(op)
+	data, duration, err := device.executeReadRegisters(op)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	return data, device, nil
+	return data, device, duration, nil
 }
 
-func (d *managedDevice) executeReadBits(op func(*simonmodbus.ModbusClient) ([]bool, error)) ([]bool, error) {
+func (d *managedDevice) executeReadBits(op func(*simonmodbus.ModbusClient) ([]bool, error)) ([]bool, time.Duration, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	start := time.Now()
 
 	d.status.LastRequestAt = time.Now().UTC()
 
 	if err := d.ensureConnectedLocked(); err != nil {
-		return nil, fmt.Errorf("connect %q: %w", d.status.Name, err)
+		return nil, 0, fmt.Errorf("connect %q: %w", d.status.Name, err)
 	}
 
 	values, err := op(d.client)
 	if err == nil {
 		d.status.LastSuccessAt = time.Now().UTC()
 		d.status.LastError = ""
-		return values, nil
+		return values, time.Since(start), nil
 	}
 
 	d.status.LastError = err.Error()
@@ -169,36 +176,37 @@ func (d *managedDevice) executeReadBits(op func(*simonmodbus.ModbusClient) ([]bo
 	_ = d.closeLocked()
 	if reconnectErr := d.ensureConnectedLocked(); reconnectErr != nil {
 		d.status.LastError = fmt.Sprintf("%v; reconnect failed: %v", err, reconnectErr)
-		return nil, fmt.Errorf("read failed: %w; reconnect failed: %v", err, reconnectErr)
+		return nil, 0, fmt.Errorf("read failed: %w; reconnect failed: %v", err, reconnectErr)
 	}
 
 	values, retryErr := op(d.client)
 	if retryErr != nil {
 		d.status.LastError = retryErr.Error()
 		d.status.Connected = false
-		return nil, fmt.Errorf("read failed after reconnect: %w", retryErr)
+		return nil, 0, fmt.Errorf("read failed after reconnect: %w", retryErr)
 	}
 
 	d.status.LastSuccessAt = time.Now().UTC()
 	d.status.LastError = ""
-	return values, nil
+	return values, time.Since(start), nil
 }
 
-func (d *managedDevice) executeReadRegisters(op func(*simonmodbus.ModbusClient) ([]byte, error)) ([]byte, error) {
+func (d *managedDevice) executeReadRegisters(op func(*simonmodbus.ModbusClient) ([]byte, error)) ([]byte, time.Duration, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	start := time.Now()
 
 	d.status.LastRequestAt = time.Now().UTC()
 
 	if err := d.ensureConnectedLocked(); err != nil {
-		return nil, fmt.Errorf("connect %q: %w", d.status.Name, err)
+		return nil, 0, fmt.Errorf("connect %q: %w", d.status.Name, err)
 	}
 
 	data, err := op(d.client)
 	if err == nil {
 		d.status.LastSuccessAt = time.Now().UTC()
 		d.status.LastError = ""
-		return data, nil
+		return data, time.Since(start), nil
 	}
 
 	d.status.LastError = err.Error()
@@ -206,19 +214,19 @@ func (d *managedDevice) executeReadRegisters(op func(*simonmodbus.ModbusClient) 
 	_ = d.closeLocked()
 	if reconnectErr := d.ensureConnectedLocked(); reconnectErr != nil {
 		d.status.LastError = fmt.Sprintf("%v; reconnect failed: %v", err, reconnectErr)
-		return nil, fmt.Errorf("read failed: %w; reconnect failed: %v", err, reconnectErr)
+		return nil, 0, fmt.Errorf("read failed: %w; reconnect failed: %v", err, reconnectErr)
 	}
 
 	data, retryErr := op(d.client)
 	if retryErr != nil {
 		d.status.LastError = retryErr.Error()
 		d.status.Connected = false
-		return nil, fmt.Errorf("read failed after reconnect: %w", retryErr)
+		return nil, 0, fmt.Errorf("read failed after reconnect: %w", retryErr)
 	}
 
 	d.status.LastSuccessAt = time.Now().UTC()
 	d.status.LastError = ""
-	return data, nil
+	return data, time.Since(start), nil
 }
 
 func decodeRegisterValues(data []byte) []uint16 {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/womat/golib/web"
 	"github.com/womat/modbusgateway/app/service/modbusclient"
@@ -22,6 +23,8 @@ type ModbusErrorResponse struct {
 	Error string `json:"error"`
 }
 
+type ModbusUint16 uint16
+
 type ModbusWriteSingleCoilRequest struct {
 	Value *bool `json:"value"`
 }
@@ -31,13 +34,13 @@ type ModbusWriteSingleRegisterRequest struct {
 }
 
 type ModbusWriteMultipleCoilsRequest struct {
-	Register *uint16 `json:"register"`
-	Values   []bool  `json:"values"`
+	Address *ModbusUint16 `json:"address"`
+	Values  []bool        `json:"values"`
 }
 
 type ModbusWriteMultipleRegistersRequest struct {
-	Register *uint16  `json:"register"`
-	Values   []uint16 `json:"values"`
+	Address *ModbusUint16 `json:"address"`
+	Values  []uint16      `json:"values"`
 }
 
 // HandleModbusListDeviceStatus returns the current manager status for all configured devices.
@@ -112,13 +115,13 @@ func (app *App) HandleModbusGetDeviceStatus() http.Handler {
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Param			device		path		string							true	"Configured device name"
-//	@Param			register	path		int								true	"Start register/address"
-//	@Param			length		query		int								false	"Number of values to read"	default(1)
+//	@Param			address		path		string							true	"Start address (decimal or 0x-prefixed hex)"
+//	@Param			quantity	query		int								false	"Number of values to read"	default(1)
 //	@Success		200			{object}	modbusclient.ReadBitsResponse	"Coils successfully read"
 //	@Failure		400			{object}	ModbusErrorResponse				"Invalid request"
 //	@Failure		502			{object}	ModbusErrorResponse				"Modbus read failed"
 //	@Failure		401			{string}	string							"Unauthorized"
-//	@Router			/devices/{device}/coils/{register} [get]
+//	@Router			/devices/{device}/coils/{address} [get]
 func (app *App) HandleModbusReadCoils() http.Handler {
 	return app.handleReadBits(func(req modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error) {
 		return app.modbusClient.ReadCoils(req)
@@ -133,13 +136,13 @@ func (app *App) HandleModbusReadCoils() http.Handler {
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Param			device		path		string							true	"Configured device name"
-//	@Param			register	path		int								true	"Start register/address"
-//	@Param			length		query		int								false	"Number of values to read"	default(1)
+//	@Param			address		path		string							true	"Start address (decimal or 0x-prefixed hex)"
+//	@Param			quantity	query		int								false	"Number of values to read"	default(1)
 //	@Success		200			{object}	modbusclient.ReadBitsResponse	"Discrete inputs successfully read"
 //	@Failure		400			{object}	ModbusErrorResponse				"Invalid request"
 //	@Failure		502			{object}	ModbusErrorResponse				"Modbus read failed"
 //	@Failure		401			{string}	string							"Unauthorized"
-//	@Router			/devices/{device}/discrete-inputs/{register} [get]
+//	@Router			/devices/{device}/discrete-inputs/{address} [get]
 func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
 	return app.handleReadBits(func(req modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error) {
 		return app.modbusClient.ReadDiscreteInputs(req)
@@ -154,13 +157,13 @@ func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Param			device		path		string								true	"Configured device name"
-//	@Param			register	path		int									true	"Start register/address"
-//	@Param			length		query		int									false	"Number of values to read"	default(1)
+//	@Param			address		path		string								true	"Start address (decimal or 0x-prefixed hex)"
+//	@Param			quantity	query		int									false	"Number of values to read"	default(1)
 //	@Success		200			{object}	modbusclient.ReadRegistersResponse	"Holding registers successfully read"
 //	@Failure		400			{object}	ModbusErrorResponse					"Invalid request"
 //	@Failure		502			{object}	ModbusErrorResponse					"Modbus read failed"
 //	@Failure		401			{string}	string								"Unauthorized"
-//	@Router			/devices/{device}/holding-registers/{register} [get]
+//	@Router			/devices/{device}/holding-registers/{address} [get]
 func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
 	return app.handleReadRegisters(func(req modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error) {
 		return app.modbusClient.ReadHoldingRegisters(req)
@@ -175,13 +178,13 @@ func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
 //	@Produce		json
 //	@Security		ApiKeyAuth
 //	@Param			device		path		string								true	"Configured device name"
-//	@Param			register	path		int									true	"Start register/address"
-//	@Param			length		query		int									false	"Number of values to read"	default(1)
+//	@Param			address		path		string								true	"Start address (decimal or 0x-prefixed hex)"
+//	@Param			quantity	query		int									false	"Number of values to read"	default(1)
 //	@Failure		400			{object}	ModbusErrorResponse					"Invalid request"
 //	@Success		200			{object}	modbusclient.ReadRegistersResponse	"Input registers successfully read"
 //	@Failure		502			{object}	ModbusErrorResponse					"Modbus read failed"
 //	@Failure		401			{string}	string								"Unauthorized"
-//	@Router			/devices/{device}/input-registers/{register} [get]
+//	@Router			/devices/{device}/input-registers/{address} [get]
 func (app *App) HandleModbusReadInputRegisters() http.Handler {
 	return app.handleReadRegisters(func(req modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error) {
 		return app.modbusClient.ReadInputRegisters(req)
@@ -196,14 +199,14 @@ func (app *App) HandleModbusReadInputRegisters() http.Handler {
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			device		path		string							true	"Configured device name"
-//	@Param			register	path		int								true	"Target register/address"
-//	@Param			request		body		ModbusWriteSingleCoilRequest	true	"Single coil write request"
-//	@Success		200			{object}	modbusclient.WriteResponse		"Coil successfully written"
-//	@Failure		400			{object}	ModbusErrorResponse				"Invalid request"
-//	@Failure		502			{object}	ModbusErrorResponse				"Modbus write failed"
-//	@Failure		401			{string}	string							"Unauthorized"
-//	@Router			/devices/{device}/coils/{register} [post]
+//	@Param			device	path		string							true	"Configured device name"
+//	@Param			address	path		string							true	"Target address (decimal or 0x-prefixed hex)"
+//	@Param			request	body		ModbusWriteSingleCoilRequest	true	"Single coil write request"
+//	@Success		200		{object}	modbusclient.WriteResponse		"Coil successfully written"
+//	@Failure		400		{object}	ModbusErrorResponse				"Invalid request"
+//	@Failure		502		{object}	ModbusErrorResponse				"Modbus write failed"
+//	@Failure		401		{string}	string							"Unauthorized"
+//	@Router			/devices/{device}/coils/{address} [post]
 func (app *App) HandleModbusWriteSingleCoil() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if app.modbusClient == nil {
@@ -248,14 +251,14 @@ func (app *App) HandleModbusWriteSingleCoil() http.Handler {
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			device		path		string								true	"Configured device name"
-//	@Param			register	path		int									true	"Target register/address"
-//	@Param			request		body		ModbusWriteSingleRegisterRequest	true	"Single register write request"
-//	@Success		200			{object}	modbusclient.WriteResponse			"Register successfully written"
-//	@Failure		400			{object}	ModbusErrorResponse					"Invalid request"
-//	@Failure		502			{object}	ModbusErrorResponse					"Modbus write failed"
-//	@Failure		401			{string}	string								"Unauthorized"
-//	@Router			/devices/{device}/holding-registers/{register} [post]
+//	@Param			device	path		string								true	"Configured device name"
+//	@Param			address	path		string								true	"Target address (decimal or 0x-prefixed hex)"
+//	@Param			request	body		ModbusWriteSingleRegisterRequest	true	"Single register write request"
+//	@Success		200		{object}	modbusclient.WriteResponse			"Register successfully written"
+//	@Failure		400		{object}	ModbusErrorResponse					"Invalid request"
+//	@Failure		502		{object}	ModbusErrorResponse					"Modbus write failed"
+//	@Failure		401		{string}	string								"Unauthorized"
+//	@Router			/devices/{device}/holding-registers/{address} [post]
 func (app *App) HandleModbusWriteSingleRegister() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if app.modbusClient == nil {
@@ -325,14 +328,14 @@ func (app *App) HandleModbusWriteMultipleCoils() http.Handler {
 			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
 			return
 		}
-		if body.Register == nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing register field"})
+		if body.Address == nil {
+			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing address field"})
 			return
 		}
 
 		resp, err := app.modbusClient.WriteMultipleCoils(modbusclient.WriteMultipleCoilsRequest{
 			Device:   device,
-			Register: *body.Register,
+			Register: uint16(*body.Address),
 			Values:   body.Values,
 		})
 		if err != nil {
@@ -377,14 +380,14 @@ func (app *App) HandleModbusWriteMultipleRegisters() http.Handler {
 			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
 			return
 		}
-		if body.Register == nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing register field"})
+		if body.Address == nil {
+			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing address field"})
 			return
 		}
 
 		resp, err := app.modbusClient.WriteMultipleRegisters(modbusclient.WriteMultipleRegistersRequest{
 			Device:   device,
-			Register: *body.Register,
+			Register: uint16(*body.Address),
 			Values:   body.Values,
 		})
 		if err != nil {
@@ -397,12 +400,12 @@ func (app *App) HandleModbusWriteMultipleRegisters() http.Handler {
 }
 
 func parseUint16(value string, field string) (uint16, error) {
-	parsed, err := strconv.ParseUint(value, 10, 16)
+	parsed, err := parseModbusUint16(value)
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s: must be an unsigned 16-bit integer", field)
+		return 0, fmt.Errorf("invalid %s: must be an unsigned 16-bit integer in decimal or 0x-prefixed hex", field)
 	}
 
-	return uint16(parsed), nil
+	return parsed, nil
 }
 
 func parseOptionalUint16(value string, defaultValue uint16, field string) (uint16, error) {
@@ -411,6 +414,46 @@ func parseOptionalUint16(value string, defaultValue uint16, field string) (uint1
 	}
 
 	return parseUint16(value, field)
+}
+
+func parseModbusUint16(value string) (uint16, error) {
+	if value == "" {
+		return 0, errors.New("empty value")
+	}
+
+	base := 10
+	if strings.HasPrefix(value, "0x") || strings.HasPrefix(value, "0X") {
+		base = 16
+		value = value[2:]
+	}
+
+	parsed, err := strconv.ParseUint(value, base, 16)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint16(parsed), nil
+}
+
+func (v *ModbusUint16) UnmarshalJSON(data []byte) error {
+	var number uint16
+	if err := json.Unmarshal(data, &number); err == nil {
+		*v = ModbusUint16(number)
+		return nil
+	}
+
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		return fmt.Errorf("address must be a number or string: %w", err)
+	}
+
+	parsed, err := parseModbusUint16(text)
+	if err != nil {
+		return fmt.Errorf("invalid address: %w", err)
+	}
+
+	*v = ModbusUint16(parsed)
+	return nil
 }
 
 func (app *App) handleReadBits(read func(modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error)) http.Handler {
@@ -425,7 +468,8 @@ func (app *App) handleReadBits(read func(modbusclient.ReadBitsRequest) (modbuscl
 			return
 		}
 
-		length, err := parseOptionalUint16(r.URL.Query().Get("length"), 1, "length")
+		quantityParam := r.URL.Query().Get("quantity")
+		length, err := parseOptionalUint16(quantityParam, 1, "quantity")
 		if err != nil {
 			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
 			return
@@ -457,7 +501,8 @@ func (app *App) handleReadRegisters(read func(modbusclient.ReadRegistersRequest)
 			return
 		}
 
-		length, err := parseOptionalUint16(r.URL.Query().Get("length"), 1, "length")
+		quantityParam := r.URL.Query().Get("quantity")
+		length, err := parseOptionalUint16(quantityParam, 1, "quantity")
 		if err != nil {
 			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
 			return
@@ -484,7 +529,8 @@ func parseDeviceRegisterPath(w http.ResponseWriter, r *http.Request) (string, ui
 		return "", 0, false
 	}
 
-	register, err := parseUint16(r.PathValue("register"), "register")
+	addressValue := r.PathValue("address")
+	register, err := parseUint16(addressValue, "address")
 	if err != nil {
 		web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
 		return "", 0, false

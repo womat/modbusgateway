@@ -74,16 +74,15 @@ func (app *App) StartWebServer() error {
 			serverErrCh <- err
 		}
 
-		// Close the listener when ServeTLS exits
-		if err := listener.Close(); err != nil {
+		// Close the listener when ServeTLS exits, but ignore the normal
+		// already-closed case during graceful shutdown.
+		if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 			slog.Error("Failed to close listener", "error", err)
 		}
 	}()
 
 	// Goroutine to monitor runtime errors and handle shutdown
-	app.wg.Add(1) // before shutdown
-	go func() {
-		defer app.wg.Done() // after shutdown
+	app.wg.Go(func() {
 
 		select {
 		case err := <-serverErrCh:
@@ -99,7 +98,7 @@ func (app *App) StartWebServer() error {
 				slog.Info("Webserver stopped gracefully")
 			}
 		}
-	}()
+	})
 
 	return nil
 }

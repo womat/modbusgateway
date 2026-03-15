@@ -119,7 +119,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/devices/{device}/coils/{register}": {
+        "/devices/{device}/coils/{address}": {
             "get": {
                 "security": [
                     {
@@ -143,9 +143,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Start register/address",
-                        "name": "register",
+                        "type": "string",
+                        "description": "Start address (decimal or 0x-prefixed hex)",
+                        "name": "address",
                         "in": "path",
                         "required": true
                     },
@@ -153,7 +153,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 1,
                         "description": "Number of values to read",
-                        "name": "length",
+                        "name": "quantity",
                         "in": "query"
                     }
                 ],
@@ -210,9 +210,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Target register/address",
-                        "name": "register",
+                        "type": "string",
+                        "description": "Target address (decimal or 0x-prefixed hex)",
+                        "name": "address",
                         "in": "path",
                         "required": true
                     },
@@ -254,7 +254,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/devices/{device}/discrete-inputs/{register}": {
+        "/devices/{device}/discrete-inputs/{address}": {
             "get": {
                 "security": [
                     {
@@ -278,9 +278,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Start register/address",
-                        "name": "register",
+                        "type": "string",
+                        "description": "Start address (decimal or 0x-prefixed hex)",
+                        "name": "address",
                         "in": "path",
                         "required": true
                     },
@@ -288,7 +288,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 1,
                         "description": "Number of values to read",
-                        "name": "length",
+                        "name": "quantity",
                         "in": "query"
                     }
                 ],
@@ -384,7 +384,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/devices/{device}/holding-registers/{register}": {
+        "/devices/{device}/holding-registers/{address}": {
             "get": {
                 "security": [
                     {
@@ -408,9 +408,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Start register/address",
-                        "name": "register",
+                        "type": "string",
+                        "description": "Start address (decimal or 0x-prefixed hex)",
+                        "name": "address",
                         "in": "path",
                         "required": true
                     },
@@ -418,7 +418,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 1,
                         "description": "Number of values to read",
-                        "name": "length",
+                        "name": "quantity",
                         "in": "query"
                     }
                 ],
@@ -475,9 +475,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Target register/address",
-                        "name": "register",
+                        "type": "string",
+                        "description": "Target address (decimal or 0x-prefixed hex)",
+                        "name": "address",
                         "in": "path",
                         "required": true
                     },
@@ -519,7 +519,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/devices/{device}/input-registers/{register}": {
+        "/devices/{device}/input-registers/{address}": {
             "get": {
                 "security": [
                     {
@@ -543,9 +543,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "type": "integer",
-                        "description": "Start register/address",
-                        "name": "register",
+                        "type": "string",
+                        "description": "Start address (decimal or 0x-prefixed hex)",
+                        "name": "address",
                         "in": "path",
                         "required": true
                     },
@@ -553,7 +553,7 @@ const docTemplate = `{
                         "type": "integer",
                         "default": 1,
                         "description": "Number of values to read",
-                        "name": "length",
+                        "name": "quantity",
                         "in": "query"
                     }
                 ],
@@ -709,7 +709,7 @@ const docTemplate = `{
         "app.ModbusWriteMultipleCoilsRequest": {
             "type": "object",
             "properties": {
-                "register": {
+                "address": {
                     "type": "integer"
                 },
                 "values": {
@@ -723,7 +723,7 @@ const docTemplate = `{
         "app.ModbusWriteMultipleRegistersRequest": {
             "type": "object",
             "properties": {
-                "register": {
+                "address": {
                     "type": "integer"
                 },
                 "values": {
@@ -807,9 +807,6 @@ const docTemplate = `{
                 "device": {
                     "type": "string"
                 },
-                "deviceId": {
-                    "type": "integer"
-                },
                 "lastConnectAt": {
                     "type": "string"
                 },
@@ -824,96 +821,105 @@ const docTemplate = `{
                 },
                 "transport": {
                     "type": "string"
+                },
+                "unitId": {
+                    "type": "integer"
                 }
             }
         },
         "modbusclient.ReadBitsResponse": {
             "type": "object",
             "properties": {
+                "address": {
+                    "type": "integer"
+                },
+                "addressHex": {
+                    "type": "string"
+                },
                 "dataHex": {
                     "type": "string"
                 },
                 "device": {
                     "type": "string"
                 },
-                "deviceId": {
-                    "type": "integer"
+                "duration": {
+                    "type": "number"
                 },
                 "functionCode": {
                     "type": "integer"
                 },
-                "length": {
-                    "type": "integer"
-                },
-                "register": {
+                "quantity": {
                     "type": "integer"
                 },
                 "transport": {
                     "type": "string"
                 },
-                "values": {
-                    "type": "array",
-                    "items": {
-                        "type": "boolean"
-                    }
+                "unitId": {
+                    "type": "integer"
                 }
             }
         },
         "modbusclient.ReadRegistersResponse": {
             "type": "object",
             "properties": {
+                "address": {
+                    "type": "integer"
+                },
+                "addressHex": {
+                    "type": "string"
+                },
                 "dataHex": {
                     "type": "string"
                 },
                 "device": {
                     "type": "string"
                 },
-                "deviceId": {
-                    "type": "integer"
+                "duration": {
+                    "type": "number"
                 },
                 "functionCode": {
                     "type": "integer"
                 },
-                "length": {
-                    "type": "integer"
-                },
-                "register": {
+                "quantity": {
                     "type": "integer"
                 },
                 "transport": {
                     "type": "string"
                 },
-                "values": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                "unitId": {
+                    "type": "integer"
                 }
             }
         },
         "modbusclient.WriteResponse": {
             "type": "object",
             "properties": {
+                "address": {
+                    "type": "integer"
+                },
+                "addressHex": {
+                    "type": "string"
+                },
                 "dataHex": {
                     "type": "string"
                 },
                 "device": {
                     "type": "string"
                 },
-                "deviceId": {
-                    "type": "integer"
+                "duration": {
+                    "type": "number"
                 },
                 "functionCode": {
                     "type": "integer"
                 },
-                "length": {
-                    "type": "integer"
-                },
-                "register": {
+                "quantity": {
                     "type": "integer"
                 },
                 "transport": {
                     "type": "string"
+                },
+                "unitId": {
+                    "type": "integer"
                 }
             }
         }

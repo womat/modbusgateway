@@ -21,11 +21,12 @@ type WriteResult struct {
 	Register uint16
 	Length   uint16
 	Data     []byte
+	Duration time.Duration
 }
 
 // WriteSingleCoil executes a FC5 write against a managed device connection.
 func (m *Manager) WriteSingleCoil(deviceName string, register uint16, value bool) (WriteResult, error) {
-	device, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
+	device, duration, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
 		return client.WriteCoil(register, value)
 	})
 	if err != nil {
@@ -42,12 +43,13 @@ func (m *Manager) WriteSingleCoil(deviceName string, register uint16, value bool
 		Register: register,
 		Length:   1,
 		Data:     encodeWriteSingleAck(register, writeValue),
+		Duration: duration,
 	}, nil
 }
 
 // WriteSingleRegister executes a FC6 write against a managed device connection.
 func (m *Manager) WriteSingleRegister(deviceName string, register, value uint16) (WriteResult, error) {
-	device, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
+	device, duration, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
 		return client.WriteRegister(register, value)
 	})
 	if err != nil {
@@ -59,6 +61,7 @@ func (m *Manager) WriteSingleRegister(deviceName string, register, value uint16)
 		Register: register,
 		Length:   1,
 		Data:     encodeWriteSingleAck(register, value),
+		Duration: duration,
 	}, nil
 }
 
@@ -71,7 +74,7 @@ func (m *Manager) WriteMultipleCoils(deviceName string, register uint16, values 
 		return WriteResult{}, fmt.Errorf("%w: max=%d", ErrValuesExceedCoilLimit, 1968)
 	}
 
-	device, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
+	device, duration, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
 		return client.WriteCoils(register, values)
 	})
 	if err != nil {
@@ -84,6 +87,7 @@ func (m *Manager) WriteMultipleCoils(deviceName string, register uint16, values 
 		Register: register,
 		Length:   length,
 		Data:     encodeWriteMultipleAck(register, length),
+		Duration: duration,
 	}, nil
 }
 
@@ -96,7 +100,7 @@ func (m *Manager) WriteMultipleRegisters(deviceName string, register uint16, val
 		return WriteResult{}, fmt.Errorf("%w: max=%d", ErrValuesExceedRegisterLimit, 123)
 	}
 
-	device, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
+	device, duration, err := m.write(deviceName, func(client *simonmodbus.ModbusClient) error {
 		return client.WriteRegisters(register, values)
 	})
 	if err != nil {
@@ -109,54 +113,57 @@ func (m *Manager) WriteMultipleRegisters(deviceName string, register uint16, val
 		Register: register,
 		Length:   length,
 		Data:     encodeWriteMultipleAck(register, length),
+		Duration: duration,
 	}, nil
 }
 
-func (m *Manager) write(deviceName string, op func(*simonmodbus.ModbusClient) error) (*managedDevice, error) {
+func (m *Manager) write(deviceName string, op func(*simonmodbus.ModbusClient) error) (*managedDevice, time.Duration, error) {
 	device, err := m.getDevice(deviceName)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	if err := device.executeWrite(op); err != nil {
-		return nil, err
+	duration, err := device.executeWrite(op)
+	if err != nil {
+		return nil, 0, err
 	}
 
-	return device, nil
+	return device, duration, nil
 }
 
-func (d *managedDevice) executeWrite(op func(*simonmodbus.ModbusClient) error) error {
+func (d *managedDevice) executeWrite(op func(*simonmodbus.ModbusClient) error) (time.Duration, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	start := time.Now()
 
 	d.status.LastRequestAt = time.Now().UTC()
 
 	if err := d.ensureConnectedLocked(); err != nil {
-		return fmt.Errorf("connect %q: %w", d.status.Name, err)
+		return 0, fmt.Errorf("connect %q: %w", d.status.Name, err)
 	}
 
 	if err := op(d.client); err == nil {
 		d.status.LastSuccessAt = time.Now().UTC()
 		d.status.LastError = ""
-		return nil
+		return time.Since(start), nil
 	} else {
 		d.status.LastError = err.Error()
 		d.status.Connected = false
 		_ = d.closeLocked()
 		if reconnectErr := d.ensureConnectedLocked(); reconnectErr != nil {
 			d.status.LastError = fmt.Sprintf("%v; reconnect failed: %v", err, reconnectErr)
-			return fmt.Errorf("write failed: %w; reconnect failed: %v", err, reconnectErr)
+			return 0, fmt.Errorf("write failed: %w; reconnect failed: %v", err, reconnectErr)
 		}
 		if retryErr := op(d.client); retryErr != nil {
 			d.status.LastError = retryErr.Error()
 			d.status.Connected = false
-			return fmt.Errorf("write failed after reconnect: %w", retryErr)
+			return 0, fmt.Errorf("write failed after reconnect: %w", retryErr)
 		}
 	}
 
 	d.status.LastSuccessAt = time.Now().UTC()
 	d.status.LastError = ""
-	return nil
+	return time.Since(start), nil
 }
 
 func packCoilValues(values []bool) []byte {

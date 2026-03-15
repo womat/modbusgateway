@@ -27,20 +27,20 @@ selected downstream devices through an optional Modbus TCP gateway for read acce
 
 ## API Endpoints
 
-| Method | Path                                                      | Auth    | Description                               |
-|--------|-----------------------------------------------------------|---------|-------------------------------------------|
-| GET    | `/version`                                                | —       | Application name and version              |
-| GET    | `/health`                                                 | API key | Runtime health information                |
-| GET    | `/devices`                                                | API key | List status of all configured devices     |
-| GET    | `/devices/{device}/status`                                | API key | Status of one configured device           |
-| GET    | `/devices/{device}/coils/{register}?length=N`             | API key | Read coils (`FC1`)                        |
-| GET    | `/devices/{device}/discrete-inputs/{register}?length=N`   | API key | Read discrete inputs (`FC2`)              |
-| GET    | `/devices/{device}/holding-registers/{register}?length=N` | API key | Read holding registers (`FC3`)            |
-| GET    | `/devices/{device}/input-registers/{register}?length=N`   | API key | Read input registers (`FC4`)              |
-| POST   | `/devices/{device}/coils/{register}`                      | API key | Write single coil (`FC5`)                 |
-| POST   | `/devices/{device}/holding-registers/{register}`          | API key | Write single holding register (`FC6`)     |
-| POST   | `/devices/{device}/coils`                                 | API key | Write multiple coils (`FC15`)             |
-| POST   | `/devices/{device}/holding-registers`                     | API key | Write multiple holding registers (`FC16`) |
+| Method | Path                                                       | Auth    | Description                               |
+|--------|------------------------------------------------------------|---------|-------------------------------------------|
+| GET    | `/version`                                                 | —       | Application name and version              |
+| GET    | `/health`                                                  | API key | Runtime health information                |
+| GET    | `/devices`                                                 | API key | List status of all configured devices     |
+| GET    | `/devices/{device}/status`                                 | API key | Status of one configured device           |
+| GET    | `/devices/{device}/coils/{address}?quantity=N`             | API key | Read coils (`FC1`)                        |
+| GET    | `/devices/{device}/discrete-inputs/{address}?quantity=N`   | API key | Read discrete inputs (`FC2`)              |
+| GET    | `/devices/{device}/holding-registers/{address}?quantity=N` | API key | Read holding registers (`FC3`)            |
+| GET    | `/devices/{device}/input-registers/{address}?quantity=N`   | API key | Read input registers (`FC4`)              |
+| POST   | `/devices/{device}/coils/{address}`                        | API key | Write single coil (`FC5`)                 |
+| POST   | `/devices/{device}/holding-registers/{address}`            | API key | Write single holding register (`FC6`)     |
+| POST   | `/devices/{device}/coils`                                  | API key | Write multiple coils (`FC15`)             |
+| POST   | `/devices/{device}/holding-registers`                      | API key | Write multiple holding registers (`FC16`) |
 
 Authentication via the `X-API-Key` header.
 
@@ -56,11 +56,15 @@ curl -k -H "X-Api-Key: your-api-key" \
 
 # Read two input registers starting at 30001
 curl -k -H "X-Api-Key: your-api-key" \
-  "https://localhost:8443/devices/smartfox/input-registers/30001?length=2"
+  "https://localhost:8443/devices/smartfox/input-registers/30001?quantity=2"
 
 # Read eight coils starting at 0
 curl -k -H "X-Api-Key: your-api-key" \
-  "https://localhost:8443/devices/smartfox/coils/0?length=8"
+  "https://localhost:8443/devices/smartfox/coils/0?quantity=8"
+
+# Read two registers with a hex start address
+curl -k -H "X-Api-Key: your-api-key" \
+  "https://localhost:8443/devices/smartfox/holding-registers/0x100?quantity=2"
 
 # Write a single coil
 curl -k -X POST -H "X-Api-Key: your-api-key" \
@@ -77,13 +81,13 @@ curl -k -X POST -H "X-Api-Key: your-api-key" \
 # Write multiple coils
 curl -k -X POST -H "X-Api-Key: your-api-key" \
   -H "Content-Type: application/json" \
-  -d '{"register":20,"values":[true,false,true,true]}' \
+  -d '{"address":"0x14","values":[true,false,true,true]}' \
   https://localhost:8443/devices/smartfox/coils
 
 # Write multiple holding registers
 curl -k -X POST -H "X-Api-Key: your-api-key" \
   -H "Content-Type: application/json" \
-  -d '{"register":100,"values":[10,20,30]}' \
+  -d '{"address":"0x64","values":[10,20,30]}' \
   https://localhost:8443/devices/smartfox/holding-registers
 
 # Application version (no auth required)
@@ -172,7 +176,7 @@ webserver:
 # Modbus devices exposed through the API
 # =============================================================================
 # Each top-level key under devices is the public device name used by the API,
-# e.g. GET /devices/fronius-smartmeter/input-registers/30001?length=2
+# e.g. GET /devices/fronius-smartmeter/input-registers/30001?quantity=2
 #
 # Common fields:
 # - description: free-text label for humans
@@ -213,13 +217,13 @@ devices:
 
 ### Device fields
 
-| Field             | Description                                            |
-|-------------------|--------------------------------------------------------|
-| `description`     | Free-text label                                        |
-| `transport`       | `tcp` or `rtu`                                         |
-| `deviceId`        | Real downstream Modbus slave/unit ID                   |
-| `gatewayDeviceId` | Optional external unit ID exposed by this gateway      |
-| `timeout`         | Go duration such as `1500ms`, `2s`, `5s`               |
+| Field             | Description                                       |
+|-------------------|---------------------------------------------------|
+| `description`     | Free-text label                                   |
+| `transport`       | `tcp` or `rtu`                                    |
+| `deviceId`        | Real downstream Modbus slave/unit ID              |
+| `gatewayDeviceId` | Optional external unit ID exposed by this gateway |
+| `timeout`         | Go duration such as `1500ms`, `2s`, `5s`          |
 
 `gatewayDeviceId` is only used by clients that connect to this gateway as a Modbus TCP server. It is intentionally
 separate from the downstream `deviceId`.

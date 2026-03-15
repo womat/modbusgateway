@@ -54,37 +54,41 @@ type WriteMultipleRegistersRequest struct {
 
 // ReadBitsResponse contains the normalized API response for a FC1 or FC2 read.
 type ReadBitsResponse struct {
-	Device       string `json:"device"`
-	Transport    string `json:"transport"`
-	DeviceID     uint8  `json:"deviceId"`
-	FunctionCode uint8  `json:"functionCode"`
-	Register     uint16 `json:"register"`
-	Length       uint16 `json:"length"`
-	DataHex      string `json:"dataHex"`
-	Values       []bool `json:"values"`
+	Device       string  `json:"device"`
+	Duration     float64 `json:"duration"`
+	Transport    string  `json:"transport"`
+	DeviceID     uint8   `json:"unitId"`
+	FunctionCode uint8   `json:"functionCode"`
+	Register     uint16  `json:"address"`
+	AddressHex   string  `json:"addressHex"`
+	Length       uint16  `json:"quantity"`
+	DataHex      string  `json:"dataHex"`
 }
 
 // ReadRegistersResponse contains the normalized API response for a FC3 or FC4 read.
 type ReadRegistersResponse struct {
-	Device       string   `json:"device"`
-	Transport    string   `json:"transport"`
-	DeviceID     uint8    `json:"deviceId"`
-	FunctionCode uint8    `json:"functionCode"`
-	Register     uint16   `json:"register"`
-	Length       uint16   `json:"length"`
-	DataHex      string   `json:"dataHex"`
-	Values       []uint16 `json:"values"`
+	Device       string  `json:"device"`
+	Duration     float64 `json:"duration"`
+	Transport    string  `json:"transport"`
+	DeviceID     uint8   `json:"unitId"`
+	FunctionCode uint8   `json:"functionCode"`
+	Register     uint16  `json:"address"`
+	AddressHex   string  `json:"addressHex"`
+	Length       uint16  `json:"quantity"`
+	DataHex      string  `json:"dataHex"`
 }
 
 // WriteResponse contains the normalized API response for write operations.
 type WriteResponse struct {
-	Device       string `json:"device"`
-	Transport    string `json:"transport"`
-	DeviceID     uint8  `json:"deviceId"`
-	FunctionCode uint8  `json:"functionCode"`
-	Register     uint16 `json:"register"`
-	Length       uint16 `json:"length"`
-	DataHex      string `json:"dataHex"`
+	Device       string  `json:"device"`
+	Duration     float64 `json:"duration"`
+	Transport    string  `json:"transport"`
+	DeviceID     uint8   `json:"unitId"`
+	FunctionCode uint8   `json:"functionCode"`
+	Register     uint16  `json:"address"`
+	AddressHex   string  `json:"addressHex"`
+	Length       uint16  `json:"quantity"`
+	DataHex      string  `json:"dataHex"`
 }
 
 // DeviceStatusResponse contains the normalized API response for one device status.
@@ -92,7 +96,7 @@ type DeviceStatusResponse struct {
 	Device        string `json:"device"`
 	Description   string `json:"description,omitempty"`
 	Transport     string `json:"transport"`
-	DeviceID      uint8  `json:"deviceId"`
+	DeviceID      uint8  `json:"unitId"`
 	Connected     bool   `json:"connected"`
 	LastError     string `json:"lastError,omitempty"`
 	LastConnectAt string `json:"lastConnectAt,omitempty"`
@@ -121,7 +125,7 @@ func (s *Service) ReadCoils(req ReadBitsRequest) (ReadBitsResponse, error) {
 		return ReadBitsResponse{}, err
 	}
 
-	return mapReadBitsResponse(result.Device, 1, result.Register, result.Length, result.Data, result.Values), nil
+	return mapReadBitsResponse(result.Device, result.Duration, 1, result.Register, result.Length, result.Data), nil
 }
 
 // ReadDiscreteInputs validates the request shape and executes a Modbus FC2 read via the manager.
@@ -135,7 +139,7 @@ func (s *Service) ReadDiscreteInputs(req ReadBitsRequest) (ReadBitsResponse, err
 		return ReadBitsResponse{}, err
 	}
 
-	return mapReadBitsResponse(result.Device, 2, result.Register, result.Length, result.Data, result.Values), nil
+	return mapReadBitsResponse(result.Device, result.Duration, 2, result.Register, result.Length, result.Data), nil
 }
 
 // ReadHoldingRegisters validates the request shape and executes a Modbus FC3 read via the manager.
@@ -149,7 +153,7 @@ func (s *Service) ReadHoldingRegisters(req ReadRegistersRequest) (ReadRegistersR
 		return ReadRegistersResponse{}, err
 	}
 
-	return mapReadRegistersResponse(result.Device, 3, result.Register, result.Length, result.Data, result.Values), nil
+	return mapReadRegistersResponse(result.Device, result.Duration, 3, result.Register, result.Length, result.Data), nil
 }
 
 // ReadInputRegisters validates the request shape and executes a Modbus FC4 read via the manager.
@@ -163,7 +167,7 @@ func (s *Service) ReadInputRegisters(req ReadRegistersRequest) (ReadRegistersRes
 		return ReadRegistersResponse{}, err
 	}
 
-	return mapReadRegistersResponse(result.Device, 4, result.Register, result.Length, result.Data, result.Values), nil
+	return mapReadRegistersResponse(result.Device, result.Duration, 4, result.Register, result.Length, result.Data), nil
 }
 
 // WriteSingleCoil validates the request shape and executes a Modbus FC5 write via the manager.
@@ -177,7 +181,7 @@ func (s *Service) WriteSingleCoil(req WriteSingleCoilRequest) (WriteResponse, er
 		return WriteResponse{}, err
 	}
 
-	return mapWriteResponse(result.Device, 5, result.Register, result.Length, result.Data), nil
+	return mapWriteResponse(result.Device, result.Duration, 5, result.Register, result.Length, result.Data), nil
 }
 
 // WriteSingleRegister validates the request shape and executes a Modbus FC6 write via the manager.
@@ -191,7 +195,7 @@ func (s *Service) WriteSingleRegister(req WriteSingleRegisterRequest) (WriteResp
 		return WriteResponse{}, err
 	}
 
-	return mapWriteResponse(result.Device, 6, result.Register, result.Length, result.Data), nil
+	return mapWriteResponse(result.Device, result.Duration, 6, result.Register, result.Length, result.Data), nil
 }
 
 // WriteMultipleCoils validates the request shape and executes a Modbus FC15 write via the manager.
@@ -205,7 +209,7 @@ func (s *Service) WriteMultipleCoils(req WriteMultipleCoilsRequest) (WriteRespon
 		return WriteResponse{}, err
 	}
 
-	return mapWriteResponse(result.Device, 15, result.Register, result.Length, result.Data), nil
+	return mapWriteResponse(result.Device, result.Duration, 15, result.Register, result.Length, result.Data), nil
 }
 
 // WriteMultipleRegisters validates the request shape and executes a Modbus FC16 write via the manager.
@@ -219,7 +223,7 @@ func (s *Service) WriteMultipleRegisters(req WriteMultipleRegistersRequest) (Wri
 		return WriteResponse{}, err
 	}
 
-	return mapWriteResponse(result.Device, 16, result.Register, result.Length, result.Data), nil
+	return mapWriteResponse(result.Device, result.Duration, 16, result.Register, result.Length, result.Data), nil
 }
 
 // GetDeviceStatus returns the current status for one configured device.
@@ -326,39 +330,43 @@ func validateWriteMultipleRegistersRequest(req WriteMultipleRegistersRequest) er
 	return nil
 }
 
-func mapReadBitsResponse(device modbusmanager.DeviceStatus, functionCode uint8, register, length uint16, data []byte, values []bool) ReadBitsResponse {
+func mapReadBitsResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte) ReadBitsResponse {
 	return ReadBitsResponse{
 		Device:       device.Name,
+		Duration:     duration.Seconds(),
 		Transport:    strings.ToLower(device.Transport),
 		DeviceID:     device.DeviceID,
 		FunctionCode: functionCode,
 		Register:     register,
+		AddressHex:   fmt.Sprintf("0x%X", register),
 		Length:       length,
 		DataHex:      strings.ToUpper(hex.EncodeToString(data)),
-		Values:       values,
 	}
 }
 
-func mapReadRegistersResponse(device modbusmanager.DeviceStatus, functionCode uint8, register, length uint16, data []byte, values []uint16) ReadRegistersResponse {
+func mapReadRegistersResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte) ReadRegistersResponse {
 	return ReadRegistersResponse{
 		Device:       device.Name,
+		Duration:     duration.Seconds(),
 		Transport:    strings.ToLower(device.Transport),
 		DeviceID:     device.DeviceID,
 		FunctionCode: functionCode,
 		Register:     register,
+		AddressHex:   fmt.Sprintf("0x%X", register),
 		Length:       length,
 		DataHex:      strings.ToUpper(hex.EncodeToString(data)),
-		Values:       values,
 	}
 }
 
-func mapWriteResponse(device modbusmanager.DeviceStatus, functionCode uint8, register, length uint16, data []byte) WriteResponse {
+func mapWriteResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte) WriteResponse {
 	return WriteResponse{
 		Device:       device.Name,
+		Duration:     duration.Seconds(),
 		Transport:    strings.ToLower(device.Transport),
 		DeviceID:     device.DeviceID,
 		FunctionCode: functionCode,
 		Register:     register,
+		AddressHex:   fmt.Sprintf("0x%X", register),
 		Length:       length,
 		DataHex:      strings.ToUpper(hex.EncodeToString(data)),
 	}
