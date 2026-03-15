@@ -810,9 +810,6 @@ const docTemplate = `{
                 "deviceId": {
                     "type": "integer"
                 },
-                "enabled": {
-                    "type": "boolean"
-                },
                 "lastConnectAt": {
                     "type": "string"
                 },

@@ -11,26 +11,34 @@ import (
 	"sync"
 	"time"
 
-	goburrowmodbus "github.com/goburrow/modbus"
+	simonmodbus "github.com/simonvetter/modbus"
 )
 
 var (
-	ErrManagerNotInitialized   = errors.New("modbus manager is not initialized")
-	ErrDeviceNameEmpty         = errors.New("device name must not be empty")
-	ErrManagerClosed           = errors.New("modbus manager is closed")
-	ErrDeviceAlreadyRegistered = errors.New("device is already registered")
-	ErrDeviceNotRegistered     = errors.New("device is not registered")
-	ErrDeviceNotConfigured     = errors.New("device is not configured")
-	ErrDeviceDisabled          = errors.New("device is disabled")
-	ErrMissingTCPSettings      = errors.New("missing tcp settings")
-	ErrMissingSerialSettings   = errors.New("missing serial settings")
-	ErrUnsupportedTransport    = errors.New("unsupported transport")
+	ErrManagerNotInitialized    = errors.New("modbus manager is not initialized")
+	ErrDeviceNameEmpty          = errors.New("device name must not be empty")
+	ErrManagerClosed            = errors.New("modbus manager is closed")
+	ErrDeviceAlreadyRegistered  = errors.New("device is already registered")
+	ErrDeviceNotRegistered      = errors.New("device is not registered")
+	ErrDeviceNotConfigured      = errors.New("device is not configured")
+	ErrTimeoutMustBePositive    = errors.New("timeout must be greater than zero")
+	ErrMissingTCPSettings       = errors.New("missing tcp settings")
+	ErrUnexpectedTCPSettings    = errors.New("unexpected tcp settings")
+	ErrTCPHostEmpty             = errors.New("tcp host must not be empty")
+	ErrTCPPortOutOfRange        = errors.New("tcp port is out of range")
+	ErrMissingSerialSettings    = errors.New("missing serial settings")
+	ErrUnexpectedSerialSettings = errors.New("unexpected serial settings")
+	ErrSerialPortEmpty          = errors.New("serial port must not be empty")
+	ErrSerialBaudRateInvalid    = errors.New("serial baud rate must be greater than zero")
+	ErrSerialDataBitsInvalid    = errors.New("serial data bits are invalid")
+	ErrUnsupportedSerialParity  = errors.New("unsupported serial parity")
+	ErrSerialStopBitsInvalid    = errors.New("serial stop bits are invalid")
+	ErrUnsupportedTransport     = errors.New("unsupported transport")
 )
 
 // DeviceConfig describes one named Modbus endpoint managed by the connection manager.
 type DeviceConfig struct {
 	Name        string
-	Enabled     bool
 	Description string
 	Transport   string
 	DeviceID    uint8
@@ -45,7 +53,7 @@ type TCPConfig struct {
 	Port int
 }
 
-// SerialConfig contains line settings for Modbus RTU or ASCII devices.
+// SerialConfig contains line settings for Modbus RTU devices.
 type SerialConfig struct {
 	Port     string
 	BaudRate int
@@ -57,7 +65,6 @@ type SerialConfig struct {
 // DeviceStatus reports the current manager view of one configured device.
 type DeviceStatus struct {
 	Name          string
-	Enabled       bool
 	Description   string
 	Transport     string
 	DeviceID      uint8
@@ -76,17 +83,10 @@ type Manager struct {
 }
 
 type managedDevice struct {
-	mu      sync.Mutex
-	config  DeviceConfig
-	handler clientHandler
-	client  goburrowmodbus.Client
-	status  DeviceStatus
-}
-
-type clientHandler interface {
-	goburrowmodbus.ClientHandler
-	Connect() error
-	Close() error
+	mu           sync.Mutex
+	clientConfig *simonmodbus.ClientConfiguration
+	client       *simonmodbus.ModbusClient
+	status       DeviceStatus
 }
 
 // New creates a new empty manager.
@@ -98,6 +98,10 @@ func New() *Manager {
 func (m *Manager) Register(cfg DeviceConfig) error {
 	if cfg.Name == "" {
 		return ErrDeviceNameEmpty
+	}
+	clientConfig, err := buildClientConfiguration(cfg)
+	if err != nil {
+		return err
 	}
 
 	m.mu.Lock()
@@ -112,10 +116,9 @@ func (m *Manager) Register(cfg DeviceConfig) error {
 	}
 
 	m.devices[cfg.Name] = &managedDevice{
-		config: cfg,
+		clientConfig: clientConfig,
 		status: DeviceStatus{
 			Name:        cfg.Name,
-			Enabled:     cfg.Enabled,
 			Description: cfg.Description,
 			Transport:   strings.ToLower(cfg.Transport),
 			DeviceID:    cfg.DeviceID,
@@ -209,18 +212,10 @@ func (m *Manager) Close() error {
 	return firstErr
 }
 
-// IsEnabled reports whether the device should be connected and served.
-func (d DeviceConfig) IsEnabled() bool {
-	return d.Enabled
-}
-
 func (m *Manager) getDevice(name string) (*managedDevice, error) {
 	device, err := m.getDeviceAny(name)
 	if err != nil {
 		return nil, err
-	}
-	if !device.config.IsEnabled() {
-		return nil, fmt.Errorf("%w: %s", ErrDeviceDisabled, name)
 	}
 
 	return device, nil
@@ -249,24 +244,23 @@ func (d *managedDevice) ensureConnected() error {
 }
 
 func (d *managedDevice) ensureConnectedLocked() error {
-	if d.client != nil && d.handler != nil {
+	if d.client != nil {
 		return nil
 	}
 
-	handler, err := newClientHandler(d.config)
+	client, err := newModbusClient(d.status, d.clientConfig)
 	if err != nil {
 		d.status.Connected = false
 		d.status.LastError = err.Error()
 		return err
 	}
-	if err = handler.Connect(); err != nil {
+	if err = client.Open(); err != nil {
 		d.status.Connected = false
 		d.status.LastError = err.Error()
 		return err
 	}
 
-	d.handler = handler
-	d.client = goburrowmodbus.NewClient(handler)
+	d.client = client
 	d.status.Connected = true
 	d.status.LastError = ""
 	d.status.LastConnectAt = time.Now().UTC()
@@ -280,14 +274,12 @@ func (d *managedDevice) close() error {
 }
 
 func (d *managedDevice) closeLocked() error {
-	if d.handler == nil {
-		d.client = nil
+	if d.client == nil {
 		d.status.Connected = false
 		return nil
 	}
 
-	err := d.handler.Close()
-	d.handler = nil
+	err := d.client.Close()
 	d.client = nil
 	d.status.Connected = false
 	if err != nil {
@@ -301,59 +293,88 @@ func (d *managedDevice) snapshotStatus() DeviceStatus {
 	defer d.mu.Unlock()
 
 	status := d.status
-	status.Name = d.config.Name
-	status.Enabled = d.config.Enabled
-	status.Description = d.config.Description
-	status.Transport = strings.ToLower(d.config.Transport)
-	status.DeviceID = d.config.DeviceID
-	status.Connected = d.client != nil && d.handler != nil && d.status.Connected
+	status.Connected = d.client != nil && d.status.Connected
 	return status
 }
 
-func newClientHandler(device DeviceConfig) (clientHandler, error) {
+func newModbusClient(device DeviceStatus, conf *simonmodbus.ClientConfiguration) (*simonmodbus.ModbusClient, error) {
+	client, err := simonmodbus.NewClient(conf)
+	if err != nil {
+		return nil, fmt.Errorf("configure client for device %q: %w", device.Name, err)
+	}
+	if err = client.SetUnitId(device.DeviceID); err != nil {
+		return nil, fmt.Errorf("set unit id for device %q: %w", device.Name, err)
+	}
+
+	return client, nil
+}
+
+func buildClientConfiguration(device DeviceConfig) (*simonmodbus.ClientConfiguration, error) {
+	if device.Timeout <= 0 {
+		return nil, fmt.Errorf("%w for device %q", ErrTimeoutMustBePositive, device.Name)
+	}
+
+	conf := &simonmodbus.ClientConfiguration{Timeout: device.Timeout}
+
 	switch strings.ToLower(device.Transport) {
 	case "tcp":
 		if device.TCP == nil {
 			return nil, fmt.Errorf("%w for device %q", ErrMissingTCPSettings, device.Name)
 		}
-		address := net.JoinHostPort(device.TCP.Host, strconv.Itoa(device.TCP.Port))
-		handler := goburrowmodbus.NewTCPClientHandler(address)
-		handler.Timeout = device.timeout()
-		handler.SlaveId = device.DeviceID
-		return handler, nil
+		if device.Serial != nil {
+			return nil, fmt.Errorf("%w for device %q", ErrUnexpectedSerialSettings, device.Name)
+		}
+		if device.TCP.Host == "" {
+			return nil, fmt.Errorf("%w for device %q", ErrTCPHostEmpty, device.Name)
+		}
+		if device.TCP.Port < 1 || device.TCP.Port > 65535 {
+			return nil, fmt.Errorf("%w for device %q: %d", ErrTCPPortOutOfRange, device.Name, device.TCP.Port)
+		}
+		conf.URL = "tcp://" + net.JoinHostPort(device.TCP.Host, strconv.Itoa(device.TCP.Port))
 	case "rtu":
 		if device.Serial == nil {
 			return nil, fmt.Errorf("%w for device %q", ErrMissingSerialSettings, device.Name)
 		}
-		handler := goburrowmodbus.NewRTUClientHandler(device.Serial.Port)
-		handler.Timeout = device.timeout()
-		handler.SlaveId = device.DeviceID
-		handler.BaudRate = device.Serial.BaudRate
-		handler.DataBits = device.Serial.DataBits
-		handler.Parity = strings.ToUpper(device.Serial.Parity)
-		handler.StopBits = device.Serial.StopBits
-		return handler, nil
-	case "ascii":
-		if device.Serial == nil {
-			return nil, fmt.Errorf("%w for device %q", ErrMissingSerialSettings, device.Name)
+		if device.TCP != nil {
+			return nil, fmt.Errorf("%w for device %q", ErrUnexpectedTCPSettings, device.Name)
 		}
-		handler := goburrowmodbus.NewASCIIClientHandler(device.Serial.Port)
-		handler.Timeout = device.timeout()
-		handler.SlaveId = device.DeviceID
-		handler.BaudRate = device.Serial.BaudRate
-		handler.DataBits = device.Serial.DataBits
-		handler.Parity = strings.ToUpper(device.Serial.Parity)
-		handler.StopBits = device.Serial.StopBits
-		return handler, nil
+		if device.Serial.Port == "" {
+			return nil, fmt.Errorf("%w for device %q", ErrSerialPortEmpty, device.Name)
+		}
+		if device.Serial.BaudRate <= 0 {
+			return nil, fmt.Errorf("%w for device %q", ErrSerialBaudRateInvalid, device.Name)
+		}
+		if device.Serial.DataBits < 5 || device.Serial.DataBits > 8 {
+			return nil, fmt.Errorf("%w for device %q: %d", ErrSerialDataBitsInvalid, device.Name, device.Serial.DataBits)
+		}
+		if device.Serial.StopBits != 1 && device.Serial.StopBits != 2 {
+			return nil, fmt.Errorf("%w for device %q: %d", ErrSerialStopBitsInvalid, device.Name, device.Serial.StopBits)
+		}
+		parity, err := mapParity(device.Serial.Parity)
+		if err != nil {
+			return nil, fmt.Errorf("%w for device %q", err, device.Name)
+		}
+		conf.URL = "rtu://" + device.Serial.Port
+		conf.Speed = uint(device.Serial.BaudRate)
+		conf.DataBits = uint(device.Serial.DataBits)
+		conf.Parity = parity
+		conf.StopBits = uint(device.Serial.StopBits)
 	default:
 		return nil, fmt.Errorf("%w %q for device %q", ErrUnsupportedTransport, device.Transport, device.Name)
 	}
+
+	return conf, nil
 }
 
-func (d DeviceConfig) timeout() time.Duration {
-	if d.Timeout <= 0 {
-		return time.Second
+func mapParity(parity string) (uint, error) {
+	switch strings.ToUpper(parity) {
+	case "N":
+		return simonmodbus.PARITY_NONE, nil
+	case "E":
+		return simonmodbus.PARITY_EVEN, nil
+	case "O":
+		return simonmodbus.PARITY_ODD, nil
+	default:
+		return 0, ErrUnsupportedSerialParity
 	}
-
-	return d.Timeout
 }

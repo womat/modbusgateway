@@ -40,7 +40,7 @@ import (
 // but we keep the correct syntax.
 // TODO: increase version number
 const (
-	VERSION = "1.6.2+20260228"
+	VERSION = "1.6.3+20260315"
 	MODULE  = "modbusgateway"
 
 	ModeStop    = 0
@@ -123,7 +123,7 @@ func (app *App) Init() (err error) {
 			_ = app.modbusMgr.Close()
 			return fmt.Errorf("register modbus device %q: %w", cfg.Name, err)
 		}
-		if device.Enabled && device.GatewayDeviceID != 0 {
+		if device.GatewayDeviceID != 0 {
 			deviceMap[device.GatewayDeviceID] = name
 		}
 	}
@@ -150,11 +150,7 @@ func (app *App) Start() error {
 		return modbusmanager.ErrManagerNotInitialized
 	}
 
-	for name, device := range app.config.Devices {
-		if !device.Enabled {
-			continue
-		}
-
+	for name := range app.config.Devices {
 		if err := app.modbusMgr.Connect(name); err != nil {
 			slog.Warn("Initial Modbus connect failed; will retry on first request",
 				"device", name,
@@ -275,7 +271,6 @@ func (app *App) Cleanup() error {
 func mapManagedDeviceConfig(name string, device DeviceConfig) modbusmanager.DeviceConfig {
 	cfg := modbusmanager.DeviceConfig{
 		Name:        name,
-		Enabled:     device.Enabled,
 		Description: device.Description,
 		Transport:   device.Transport,
 		DeviceID:    device.DeviceID,

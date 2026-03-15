@@ -8,7 +8,7 @@ selected downstream devices through an optional Modbus TCP gateway for read acce
 ## Features
 
 - Optional Modbus TCP server for read access (`FC1`-`FC4`)
-- Supports Modbus TCP, RTU, and ASCII downstream devices
+- Supports Modbus TCP and RTU downstream devices
 - Exposes a secured **HTTPS REST API** (API key authentication)
 - **IP allowlist / blocklist** support
 - **Hot-reload** of configuration via `SIGHUP`
@@ -175,9 +175,8 @@ webserver:
 # e.g. GET /devices/fronius-smartmeter/input-registers/30001?length=2
 #
 # Common fields:
-# - enabled: disable a device without removing its config
 # - description: free-text label for humans
-# - transport: tcp | rtu | ascii
+# - transport: tcp | rtu
 # - deviceId: Modbus slave/unit identifier on that bus
 # - gatewayDeviceId: optional external Modbus unit ID of this gateway
 #   Clients use this ID against the gateway server. It is independent from
@@ -186,10 +185,9 @@ webserver:
 #
 # Transport-specific blocks:
 # - tcp: required when transport=tcp
-# - serial: required when transport=rtu or transport=ascii
+# - serial: required when transport=rtu
 devices:
   smartfox:
-    enabled: true
     description: PV controller
     transport: tcp
     deviceId: 2
@@ -200,7 +198,6 @@ devices:
       port: 502
 
   fronius-smartmeter:
-    enabled: true
     description: Main power meter
     transport: rtu
     deviceId: 1
@@ -218,9 +215,8 @@ devices:
 
 | Field             | Description                                            |
 |-------------------|--------------------------------------------------------|
-| `enabled`         | Enable or disable a device without deleting its config |
 | `description`     | Free-text label                                        |
-| `transport`       | `tcp`, `rtu`, or `ascii`                               |
+| `transport`       | `tcp` or `rtu`                                         |
 | `deviceId`        | Real downstream Modbus slave/unit ID                   |
 | `gatewayDeviceId` | Optional external unit ID exposed by this gateway      |
 | `timeout`         | Go duration such as `1500ms`, `2s`, `5s`               |
@@ -237,8 +233,7 @@ configured downstream devices.
 - writes stay on the REST API
 - every exposed device needs a unique `gatewayDeviceId`
 
-The server implementation uses `github.com/simonvetter/modbus`. The outbound client stack remains on
-`github.com/goburrow/modbus`.
+Both the Modbus TCP server and the outbound client stack use `github.com/simonvetter/modbus`.
 
 ---
 

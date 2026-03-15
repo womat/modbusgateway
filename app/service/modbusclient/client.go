@@ -90,7 +90,6 @@ type WriteResponse struct {
 // DeviceStatusResponse contains the normalized API response for one device status.
 type DeviceStatusResponse struct {
 	Device        string `json:"device"`
-	Enabled       bool   `json:"enabled"`
 	Description   string `json:"description,omitempty"`
 	Transport     string `json:"transport"`
 	DeviceID      uint8  `json:"deviceId"`
@@ -327,7 +326,7 @@ func validateWriteMultipleRegistersRequest(req WriteMultipleRegistersRequest) er
 	return nil
 }
 
-func mapReadBitsResponse(device modbusmanager.DeviceConfig, functionCode uint8, register, length uint16, data []byte, values []bool) ReadBitsResponse {
+func mapReadBitsResponse(device modbusmanager.DeviceStatus, functionCode uint8, register, length uint16, data []byte, values []bool) ReadBitsResponse {
 	return ReadBitsResponse{
 		Device:       device.Name,
 		Transport:    strings.ToLower(device.Transport),
@@ -340,7 +339,7 @@ func mapReadBitsResponse(device modbusmanager.DeviceConfig, functionCode uint8, 
 	}
 }
 
-func mapReadRegistersResponse(device modbusmanager.DeviceConfig, functionCode uint8, register, length uint16, data []byte, values []uint16) ReadRegistersResponse {
+func mapReadRegistersResponse(device modbusmanager.DeviceStatus, functionCode uint8, register, length uint16, data []byte, values []uint16) ReadRegistersResponse {
 	return ReadRegistersResponse{
 		Device:       device.Name,
 		Transport:    strings.ToLower(device.Transport),
@@ -353,7 +352,7 @@ func mapReadRegistersResponse(device modbusmanager.DeviceConfig, functionCode ui
 	}
 }
 
-func mapWriteResponse(device modbusmanager.DeviceConfig, functionCode uint8, register, length uint16, data []byte) WriteResponse {
+func mapWriteResponse(device modbusmanager.DeviceStatus, functionCode uint8, register, length uint16, data []byte) WriteResponse {
 	return WriteResponse{
 		Device:       device.Name,
 		Transport:    strings.ToLower(device.Transport),
@@ -368,7 +367,6 @@ func mapWriteResponse(device modbusmanager.DeviceConfig, functionCode uint8, reg
 func mapStatus(status modbusmanager.DeviceStatus) DeviceStatusResponse {
 	return DeviceStatusResponse{
 		Device:        status.Name,
-		Enabled:       status.Enabled,
 		Description:   status.Description,
 		Transport:     strings.ToLower(status.Transport),
 		DeviceID:      status.DeviceID,

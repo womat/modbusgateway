@@ -48,7 +48,6 @@ type ModbusServerConfig struct {
 
 // DeviceConfig describes one named Modbus endpoint exposed by the API.
 type DeviceConfig struct {
-	Enabled         bool          `yaml:"enabled"`
 	Description     string        `yaml:"description"`
 	Transport       string        `yaml:"transport"`
 	DeviceID        uint8         `yaml:"deviceId"`
@@ -158,7 +157,7 @@ func (c *Config) Validate() error {
 		if err := validateDeviceConfig(name, device); err != nil {
 			return err
 		}
-		if c.ModbusServer.Enabled && device.Enabled && device.GatewayDeviceID > 0 {
+		if c.ModbusServer.Enabled && device.GatewayDeviceID > 0 {
 			if other, exists := gatewayIDs[device.GatewayDeviceID]; exists {
 				return fmt.Errorf("devices %q and %q use the same gatewayDeviceId %d", other, name, device.GatewayDeviceID)
 			}
@@ -167,7 +166,7 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.ModbusServer.Enabled && exposedCount == 0 {
-		return errors.New("modbusServer is enabled, but no enabled device has a gatewayDeviceId configured")
+		return errors.New("modbusServer is enabled, but no device has a gatewayDeviceId configured")
 	}
 
 	return nil
@@ -180,12 +179,12 @@ func validateDeviceConfig(name string, device DeviceConfig) error {
 	}
 
 	transport := strings.ToLower(device.Transport)
-	if !slices.Contains([]string{"tcp", "rtu", "ascii"}, transport) {
-		return fmt.Errorf("device %q: invalid transport %q, must be tcp, rtu, or ascii", name, device.Transport)
+	if !slices.Contains([]string{"tcp", "rtu"}, transport) {
+		return fmt.Errorf("device %q: invalid transport %q, must be tcp or rtu", name, device.Transport)
 	}
 
-	if device.Timeout < 0 {
-		return fmt.Errorf("device %q: timeout must be >= 0", name)
+	if device.Timeout <= 0 {
+		return fmt.Errorf("device %q: timeout must be > 0", name)
 	}
 
 	switch transport {
@@ -202,7 +201,7 @@ func validateDeviceConfig(name string, device DeviceConfig) error {
 		if device.TCP.Port < 1 || device.TCP.Port > 65535 {
 			return fmt.Errorf("device %q: invalid tcp.port %d", name, device.TCP.Port)
 		}
-	case "rtu", "ascii":
+	case "rtu":
 		if device.Serial == nil {
 			return fmt.Errorf("device %q: serial config is required for transport=%s", name, transport)
 		}

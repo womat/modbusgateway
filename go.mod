@@ -3,7 +3,6 @@ module github.com/womat/modbusgateway
 go 1.25.0
 
 require (
-	github.com/goburrow/modbus v0.1.0
 	github.com/simonvetter/modbus v1.6.4
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.6
