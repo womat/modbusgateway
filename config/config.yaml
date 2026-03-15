@@ -1,31 +1,125 @@
-# webserver configuration
+# =============================================================================
+# app configuration
+# =============================================================================
+
+# logLevel defines the minimum log level.
+# Messages with at least this level are logged.
+# Allowed values: debug | info | warn | error
+logLevel: info
+
+# logDestination defines where logs are written to.
+# Supported values: stdout | stderr | /path/to/logfile
+logDestination: stdout
+
+# environment: dev | prod
+env: dev
+
+
+# =============================================================================
+# Webserver configuration (HTTPS)
+# =============================================================================
 webserver:
-  active: yes
-  port:   8080
+  # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
+  listenHost: 0.0.0.0
 
-# enable/disable webservices
-webservices:
-  version:     true
-  readholdingregisters: true
+  # Port the HTTPS server listens on
+  listenPort: 8443
 
-# enable debugging and log path
-debug:
-  active: yes
-  path:   ./ #/var/log/uxsol
+  # Global API key for protected endpoints
+  apiKey: changeme!
 
-IsQuiet: no
+  # TLS private key file
+  keyFile: /opt/demo_app/etc/key.pem
 
-modbusclient:
-  # connection eg: TCP 192.168.65.197:502  DeviceId:1 Timeout:500
-  # connection eg: RTU com4,9600,8,N,1 DeviceId:1 Timeout:1000
-  # Timeout in ms (default 1000ms)
-  # DeviceId default 1
-  connection: TCP 192.168.65.197:502 DeviceId:2 Timeout:2000
-  #connection: RTU com4,9600,8,N,1 DeviceId:1 Timeout:1500
+  # TLS certificate file
+  certFile: /opt/demo_app/etc/cert.pem
 
-  permitted:
-   - ^TCP 127\.0\.0\.1:502
-    #- ^TCP 192\.168\.65\.197:502
-    #- ^RTU com4
-    #- ^ASCII|^RTU tty[0-9]{1,2},
-    #- ^TCP 192\.168\.65\.[0-9]{1,3}:[0-9]{1,5}
+  # Blocked IP addresses or networks (empty = none blocked)
+  # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
+  blockedIPs: []
+  #  - 192.168.0.1
+  #  - 192.168.0.0/16
+
+  # Allowed IP addresses or networks (empty = all allowed)
+  # Note: ::1 is the IPv6 loopback address
+  # Examples: 127.0.0.1, ::1, 192.168.0.0/16
+  allowedIPs: []
+  #  - 127.0.0.1
+  #  - ::1
+  #  - 192.168.0.0/16
+
+# =============================================================================
+# Optional Modbus TCP gateway server
+# =============================================================================
+# When enabled, this process also listens as a Modbus TCP server and forwards
+# incoming read requests (FC1-FC4) to configured downstream devices.
+modbusServer:
+  enabled: false
+  listenHost: 0.0.0.0
+  listenPort: 1502
+
+# =============================================================================
+# Modbus devices exposed through the API
+# =============================================================================
+# Each top-level key under devices is the public device name used by the API,
+# e.g. GET /devices/fronius-smartmeter/input-registers/30001?length=2
+#
+# Common fields:
+# - enabled: disable a device without removing its config
+# - description: free-text label for humans
+# - transport: tcp | rtu | ascii
+# - deviceId: Modbus slave/unit identifier on that bus
+# - gatewayDeviceId: optional external Modbus unit ID of this gateway
+#   Clients use this ID against the gateway server. It is independent from
+#   deviceId, which remains the slave/unit ID of the real downstream device.
+# - timeout: request timeout as Go duration, e.g. 1500ms, 2s
+#
+# Transport-specific blocks:
+# - tcp: required when transport=tcp
+# - serial: required when transport=rtu or transport=ascii
+devices:
+  # Example RTU device on a serial bus.
+  fronius-smartmeter:
+    enabled: true
+    description: Main power meter
+    transport: rtu
+    deviceId: 1
+    gatewayDeviceId: 11
+    timeout: 1s
+    serial:
+      # Serial device path, e.g. /dev/ttyUSB0 or /dev/ttyS0
+      port: /dev/ttyUSB0
+      # Typical serial settings from the device manual.
+      baudRate: 9600
+      dataBits: 8
+      parity: N
+      stopBits: 1
+
+  # Example Modbus TCP device reachable via IP and port 502.
+  smartfox:
+    enabled: true
+    description: PV controller
+    transport: tcp
+    deviceId: 2
+    gatewayDeviceId: 12
+    timeout: 2s
+    tcp:
+      # Hostname or IP address of the Modbus TCP endpoint.
+      host: 192.168.65.197
+      # Default Modbus TCP port is usually 502.
+      port: 502
+
+  # Example Modbus ASCII device using serial settings.
+  ascii-meter:
+    enabled: true
+    description: Legacy serial meter
+    transport: ascii
+    deviceId: 3
+    gatewayDeviceId: 13
+    timeout: 1500ms
+    serial:
+      port: /dev/ttyS0
+      baudRate: 9600
+      dataBits: 8
+      parity: E
+      stopBits: 1

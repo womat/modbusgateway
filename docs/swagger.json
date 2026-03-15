@@ -1,0 +1,920 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/devices": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current connection and health status for all configured Modbus devices.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "List configured device status",
+                "responses": {
+                    "200": {
+                        "description": "Device status list",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/modbusclient.DeviceStatusResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Modbus service unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/coils": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Writes multiple coils on a configured Modbus device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 15: Write multiple coils",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Multiple coils write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusWriteMultipleCoilsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Coils successfully written",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.WriteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/coils/{register}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reads one or more coils from a configured Modbus device.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 1: Read coils",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Start register/address",
+                        "name": "register",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of values to read",
+                        "name": "length",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Coils successfully read",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.ReadBitsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Writes a single coil on a configured Modbus device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 5: Write single coil",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Target register/address",
+                        "name": "register",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Single coil write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusWriteSingleCoilRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Coil successfully written",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.WriteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/discrete-inputs/{register}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reads one or more discrete inputs from a configured Modbus device.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 2: Read discrete inputs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Start register/address",
+                        "name": "register",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of values to read",
+                        "name": "length",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Discrete inputs successfully read",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.ReadBitsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/holding-registers": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Writes multiple holding registers on a configured Modbus device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 16: Write multiple holding registers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Multiple registers write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusWriteMultipleRegistersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Registers successfully written",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.WriteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/holding-registers/{register}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reads one or more holding registers from a configured Modbus device.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 3: Read holding registers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Start register/address",
+                        "name": "register",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of values to read",
+                        "name": "length",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Holding registers successfully read",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.ReadRegistersResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Writes a single holding register on a configured Modbus device.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 6: Write single holding register",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Target register/address",
+                        "name": "register",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Single register write request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusWriteSingleRegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Register successfully written",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.WriteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/input-registers/{register}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Reads one or more input registers from a configured Modbus device.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "FC 4: Read input registers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Start register/address",
+                        "name": "register",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of values to read",
+                        "name": "length",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Input registers successfully read",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.ReadRegistersResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "502": {
+                        "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/devices/{device}/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the current connection and health status for one configured Modbus device.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "modbus"
+                ],
+                "summary": "Get device status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Configured device name",
+                        "name": "device",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Device status",
+                        "schema": {
+                            "$ref": "#/definitions/modbusclient.DeviceStatusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Modbus service unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get health data",
+                "responses": {
+                    "200": {
+                        "description": "Health data successfully retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/health.Model"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/version": {
+            "get": {
+                "description": "Returns the current application name and version. No authentication required.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get application version and name",
+                "responses": {
+                    "200": {
+                        "description": "Application version and name",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "app": {
+                                    "type": "string"
+                                },
+                                "appVersion": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "app.ModbusErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "app.ModbusWriteMultipleCoilsRequest": {
+            "type": "object",
+            "properties": {
+                "register": {
+                    "type": "integer"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "app.ModbusWriteMultipleRegistersRequest": {
+            "type": "object",
+            "properties": {
+                "register": {
+                    "type": "integer"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "app.ModbusWriteSingleCoilRequest": {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "app.ModbusWriteSingleRegisterRequest": {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "integer"
+                }
+            }
+        },
+        "health.Model": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "description": "Application name (MODULE)",
+                    "type": "string"
+                },
+                "appVersion": {
+                    "description": "Current version of the application",
+                    "type": "string"
+                },
+                "goVersion": {
+                    "description": "Go runtime version",
+                    "type": "string"
+                },
+                "heapAllocBytes": {
+                    "description": "Allocated heap memory in bytes",
+                    "type": "integer"
+                },
+                "hostname": {
+                    "description": "Machine name where the app runs",
+                    "type": "string"
+                },
+                "numGoroutines": {
+                    "description": "Current number of active goroutines",
+                    "type": "integer"
+                },
+                "os": {
+                    "description": "Operating system name",
+                    "type": "string"
+                },
+                "sysMemoryBytes": {
+                    "description": "Total memory obtained from the OS",
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "description": "UTC timestamp when health info was collected (RFC3339)",
+                    "type": "string"
+                },
+                "uptimeSeconds": {
+                    "description": "Application uptime in seconds",
+                    "type": "number"
+                }
+            }
+        },
+        "modbusclient.DeviceStatusResponse": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "type": "boolean"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "deviceId": {
+                    "type": "integer"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "lastConnectAt": {
+                    "type": "string"
+                },
+                "lastError": {
+                    "type": "string"
+                },
+                "lastRequestAt": {
+                    "type": "string"
+                },
+                "lastSuccessAt": {
+                    "type": "string"
+                },
+                "transport": {
+                    "type": "string"
+                }
+            }
+        },
+        "modbusclient.ReadBitsResponse": {
+            "type": "object",
+            "properties": {
+                "dataHex": {
+                    "type": "string"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "deviceId": {
+                    "type": "integer"
+                },
+                "functionCode": {
+                    "type": "integer"
+                },
+                "length": {
+                    "type": "integer"
+                },
+                "register": {
+                    "type": "integer"
+                },
+                "transport": {
+                    "type": "string"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "modbusclient.ReadRegistersResponse": {
+            "type": "object",
+            "properties": {
+                "dataHex": {
+                    "type": "string"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "deviceId": {
+                    "type": "integer"
+                },
+                "functionCode": {
+                    "type": "integer"
+                },
+                "length": {
+                    "type": "integer"
+                },
+                "register": {
+                    "type": "integer"
+                },
+                "transport": {
+                    "type": "string"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "modbusclient.WriteResponse": {
+            "type": "object",
+            "properties": {
+                "dataHex": {
+                    "type": "string"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "deviceId": {
+                    "type": "integer"
+                },
+                "functionCode": {
+                    "type": "integer"
+                },
+                "length": {
+                    "type": "integer"
+                },
+                "register": {
+                    "type": "integer"
+                },
+                "transport": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
+        }
+    }
+}

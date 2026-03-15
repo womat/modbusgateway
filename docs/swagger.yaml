@@ -1,0 +1,601 @@
+definitions:
+  app.ModbusErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  app.ModbusWriteMultipleCoilsRequest:
+    properties:
+      register:
+        type: integer
+      values:
+        items:
+          type: boolean
+        type: array
+    type: object
+  app.ModbusWriteMultipleRegistersRequest:
+    properties:
+      register:
+        type: integer
+      values:
+        items:
+          type: integer
+        type: array
+    type: object
+  app.ModbusWriteSingleCoilRequest:
+    properties:
+      value:
+        type: boolean
+    type: object
+  app.ModbusWriteSingleRegisterRequest:
+    properties:
+      value:
+        type: integer
+    type: object
+  health.Model:
+    properties:
+      app:
+        description: Application name (MODULE)
+        type: string
+      appVersion:
+        description: Current version of the application
+        type: string
+      goVersion:
+        description: Go runtime version
+        type: string
+      heapAllocBytes:
+        description: Allocated heap memory in bytes
+        type: integer
+      hostname:
+        description: Machine name where the app runs
+        type: string
+      numGoroutines:
+        description: Current number of active goroutines
+        type: integer
+      os:
+        description: Operating system name
+        type: string
+      sysMemoryBytes:
+        description: Total memory obtained from the OS
+        type: integer
+      timestamp:
+        description: UTC timestamp when health info was collected (RFC3339)
+        type: string
+      uptimeSeconds:
+        description: Application uptime in seconds
+        type: number
+    type: object
+  modbusclient.DeviceStatusResponse:
+    properties:
+      connected:
+        type: boolean
+      description:
+        type: string
+      device:
+        type: string
+      deviceId:
+        type: integer
+      enabled:
+        type: boolean
+      lastConnectAt:
+        type: string
+      lastError:
+        type: string
+      lastRequestAt:
+        type: string
+      lastSuccessAt:
+        type: string
+      transport:
+        type: string
+    type: object
+  modbusclient.ReadBitsResponse:
+    properties:
+      dataHex:
+        type: string
+      device:
+        type: string
+      deviceId:
+        type: integer
+      functionCode:
+        type: integer
+      length:
+        type: integer
+      register:
+        type: integer
+      transport:
+        type: string
+      values:
+        items:
+          type: boolean
+        type: array
+    type: object
+  modbusclient.ReadRegistersResponse:
+    properties:
+      dataHex:
+        type: string
+      device:
+        type: string
+      deviceId:
+        type: integer
+      functionCode:
+        type: integer
+      length:
+        type: integer
+      register:
+        type: integer
+      transport:
+        type: string
+      values:
+        items:
+          type: integer
+        type: array
+    type: object
+  modbusclient.WriteResponse:
+    properties:
+      dataHex:
+        type: string
+      device:
+        type: string
+      deviceId:
+        type: integer
+      functionCode:
+        type: integer
+      length:
+        type: integer
+      register:
+        type: integer
+      transport:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /devices:
+    get:
+      description: Returns the current connection and health status for all configured
+        Modbus devices.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Device status list
+          schema:
+            items:
+              $ref: '#/definitions/modbusclient.DeviceStatusResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "503":
+          description: Modbus service unavailable
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List configured device status
+      tags:
+      - modbus
+  /devices/{device}/coils:
+    post:
+      consumes:
+      - application/json
+      description: Writes multiple coils on a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Multiple coils write request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/app.ModbusWriteMultipleCoilsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Coils successfully written
+          schema:
+            $ref: '#/definitions/modbusclient.WriteResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus write failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 15: Write multiple coils'
+      tags:
+      - modbus
+  /devices/{device}/coils/{register}:
+    get:
+      description: Reads one or more coils from a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Start register/address
+        in: path
+        name: register
+        required: true
+        type: integer
+      - default: 1
+        description: Number of values to read
+        in: query
+        name: length
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Coils successfully read
+          schema:
+            $ref: '#/definitions/modbusclient.ReadBitsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus read failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 1: Read coils'
+      tags:
+      - modbus
+    post:
+      consumes:
+      - application/json
+      description: Writes a single coil on a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Target register/address
+        in: path
+        name: register
+        required: true
+        type: integer
+      - description: Single coil write request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/app.ModbusWriteSingleCoilRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Coil successfully written
+          schema:
+            $ref: '#/definitions/modbusclient.WriteResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus write failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 5: Write single coil'
+      tags:
+      - modbus
+  /devices/{device}/discrete-inputs/{register}:
+    get:
+      description: Reads one or more discrete inputs from a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Start register/address
+        in: path
+        name: register
+        required: true
+        type: integer
+      - default: 1
+        description: Number of values to read
+        in: query
+        name: length
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Discrete inputs successfully read
+          schema:
+            $ref: '#/definitions/modbusclient.ReadBitsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus read failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 2: Read discrete inputs'
+      tags:
+      - modbus
+  /devices/{device}/holding-registers:
+    post:
+      consumes:
+      - application/json
+      description: Writes multiple holding registers on a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Multiple registers write request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/app.ModbusWriteMultipleRegistersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Registers successfully written
+          schema:
+            $ref: '#/definitions/modbusclient.WriteResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus write failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 16: Write multiple holding registers'
+      tags:
+      - modbus
+  /devices/{device}/holding-registers/{register}:
+    get:
+      description: Reads one or more holding registers from a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Start register/address
+        in: path
+        name: register
+        required: true
+        type: integer
+      - default: 1
+        description: Number of values to read
+        in: query
+        name: length
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Holding registers successfully read
+          schema:
+            $ref: '#/definitions/modbusclient.ReadRegistersResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus read failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 3: Read holding registers'
+      tags:
+      - modbus
+    post:
+      consumes:
+      - application/json
+      description: Writes a single holding register on a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Target register/address
+        in: path
+        name: register
+        required: true
+        type: integer
+      - description: Single register write request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/app.ModbusWriteSingleRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Register successfully written
+          schema:
+            $ref: '#/definitions/modbusclient.WriteResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus write failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 6: Write single holding register'
+      tags:
+      - modbus
+  /devices/{device}/input-registers/{register}:
+    get:
+      description: Reads one or more input registers from a configured Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      - description: Start register/address
+        in: path
+        name: register
+        required: true
+        type: integer
+      - default: 1
+        description: Number of values to read
+        in: query
+        name: length
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Input registers successfully read
+          schema:
+            $ref: '#/definitions/modbusclient.ReadRegistersResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "502":
+          description: Modbus read failed
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: 'FC 4: Read input registers'
+      tags:
+      - modbus
+  /devices/{device}/status:
+    get:
+      description: Returns the current connection and health status for one configured
+        Modbus device.
+      parameters:
+      - description: Configured device name
+        in: path
+        name: device
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Device status
+          schema:
+            $ref: '#/definitions/modbusclient.DeviceStatusResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Device not found
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+        "503":
+          description: Modbus service unavailable
+          schema:
+            $ref: '#/definitions/app.ModbusErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get device status
+      tags:
+      - modbus
+  /health:
+    get:
+      description: Retrieves memory usage, goroutine count, version, hostname, Go
+        runtime version, and OS.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health data successfully retrieved
+          schema:
+            $ref: '#/definitions/health.Model'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Get health data
+      tags:
+      - info
+  /version:
+    get:
+      description: Returns the current application name and version. No authentication
+        required.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Application version and name
+          schema:
+            properties:
+              app:
+                type: string
+              appVersion:
+                type: string
+            type: object
+      summary: Get application version and name
+      tags:
+      - info
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: X-API-Key
+    type: apiKey
+swagger: "2.0"
