@@ -25,7 +25,7 @@ ohne Angabe nur lesen. Keine Cloud, keine Datenbank: ein einzelnes Programm und 
 ## In fünf Schritten
 
 1. **Herunterladen:** Das Archiv für deinen Pi gibt es unter
-   [Releases](https://github.com/womat/ModbusGateway/releases/latest): `armv6` für Pi 1 und Zero
+   [Releases](https://github.com/womat/modbusgateway/releases/latest): `armv6` für Pi 1 und Zero
    (läuft auf jedem Pi), `armv7` für 32-Bit-Systeme, `arm64` für 64-Bit-Systeme.
 2. **Installieren:** System-User `modbusgateway` anlegen und der Gruppe `dialout` hinzufügen (Zugriff
    auf die serielle Schnittstelle), Programm und `config.yaml` nach `/opt/modbusgateway` kopieren,

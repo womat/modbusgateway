@@ -3,10 +3,10 @@
 **Put your Modbus devices on the network: an HTTPS REST API and a Modbus RTU ⇄ TCP gateway for a
 Raspberry Pi, with one queue per bus.**
 
-[![CI](https://github.com/womat/ModbusGateway/actions/workflows/ci.yml/badge.svg)](https://github.com/womat/ModbusGateway/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/womat/ModbusGateway)](https://github.com/womat/ModbusGateway/releases/latest)
+[![CI](https://github.com/womat/modbusgateway/actions/workflows/ci.yml/badge.svg)](https://github.com/womat/modbusgateway/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/womat/modbusgateway)](https://github.com/womat/modbusgateway/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-[![Go](https://img.shields.io/github/go-mod/go-version/womat/ModbusGateway)](go.mod)
+[![Go](https://img.shields.io/github/go-mod/go-version/womat/modbusgateway)](go.mod)
 ![Raspberry Pi](https://img.shields.io/badge/runs%20on-Raspberry%20Pi-C51A4A)
 
 🇩🇪 [Deutsche Kurzfassung](README.de.md)
@@ -48,7 +48,7 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 
 ## Quick start
 
-**1. Download** the archive for your Pi from the [latest release](https://github.com/womat/ModbusGateway/releases/latest):
+**1. Download** the archive for your Pi from the [latest release](https://github.com/womat/modbusgateway/releases/latest):
 
 | Archive        | Raspberry Pi model                                    |
 |----------------|-------------------------------------------------------|
@@ -58,7 +58,7 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 
 ```sh
 VERSION=2.0.0 ARCH=armv6        # see the release page for the latest version
-BASE=https://github.com/womat/ModbusGateway/releases/download/v$VERSION
+BASE=https://github.com/womat/modbusgateway/releases/download/v$VERSION
 curl -LO $BASE/modbusgateway_${VERSION}_linux_$ARCH.tar.gz -LO $BASE/checksums.txt
 sha256sum -c checksums.txt --ignore-missing
 tar xzf modbusgateway_${VERSION}_linux_$ARCH.tar.gz
@@ -447,7 +447,7 @@ sudo systemctl restart modbusgateway
 
 ## Releases
 
-Every release on the [releases page](https://github.com/womat/ModbusGateway/releases) carries
+Every release on the [releases page](https://github.com/womat/modbusgateway/releases) carries
 archives for all Raspberry Pi architectures with the binary, `config/config.yaml`, `README.md` and
 `LICENSE`, plus a `checksums.txt` and a changelog. Versions follow
 [semantic versioning](https://semver.org/); a breaking change of the API or the configuration raises

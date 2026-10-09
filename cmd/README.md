@@ -53,4 +53,4 @@ Modbus listeners: `listen.tcp` offers the devices on serial buses to Modbus TCP 
 ---
 
 Configuration, installation, TLS and build: see `README.md` in the repository,
-https://github.com/womat/ModbusGateway
+https://github.com/womat/modbusgateway

@@ -178,7 +178,7 @@ func About() string {
 		"Help":     filepath.Join("/opt", app.MODULE, "bin", app.MODULE) + " --help",
 		"Main":     filepath.Join("/opt/src", app.MODULE, "cmd", app.MODULE, "main.go"),
 		"ProgLang": runtime.Version(),
-		"Repo":     "https://github.com/womat/ModbusGateway",
+		"Repo":     "https://github.com/womat/modbusgateway",
 		"Version":  app.VERSION,
 	}
 

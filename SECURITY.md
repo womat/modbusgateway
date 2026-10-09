@@ -11,7 +11,7 @@ to a trusted interface or protect it with a firewall.
 ## Reporting a vulnerability
 
 Please **do not open a public issue**. Report it privately through GitHub instead:
-**Security → Report a vulnerability** ([direct link](https://github.com/womat/ModbusGateway/security/advisories/new)).
+**Security → Report a vulnerability** ([direct link](https://github.com/womat/modbusgateway/security/advisories/new)).
 
 Helpful details:
 
