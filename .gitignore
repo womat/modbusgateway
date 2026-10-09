@@ -1,4 +1,7 @@
 /bin/
 .idea
-/go.sum
-*.pem
+.DS_Store
+/app/certs/
+/config/*.pem
+/dist/
+/Makefile.local

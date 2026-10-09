@@ -120,6 +120,10 @@ func (app *App) HandleModbusGetDeviceStatus() http.Handler {
 //	@Success		200			{object}	modbusclient.ReadBitsResponse	"Coils successfully read"
 //	@Failure		400			{object}	ModbusErrorResponse				"Invalid request"
 //	@Failure		502			{object}	ModbusErrorResponse				"Modbus read failed"
+//	@Failure		403			{object}	ModbusErrorResponse				"Function code not allowed for the device"
+//	@Failure		404			{object}	ModbusErrorResponse				"Device not found"
+//	@Failure		503			{object}	ModbusErrorResponse				"Bus queue full"
+//	@Failure		504			{object}	ModbusErrorResponse				"Request waited too long in the bus queue"
 //	@Failure		401			{string}	string							"Unauthorized"
 //	@Router			/devices/{device}/coils/{address} [get]
 func (app *App) HandleModbusReadCoils() http.Handler {
@@ -141,6 +145,10 @@ func (app *App) HandleModbusReadCoils() http.Handler {
 //	@Success		200			{object}	modbusclient.ReadBitsResponse	"Discrete inputs successfully read"
 //	@Failure		400			{object}	ModbusErrorResponse				"Invalid request"
 //	@Failure		502			{object}	ModbusErrorResponse				"Modbus read failed"
+//	@Failure		403			{object}	ModbusErrorResponse				"Function code not allowed for the device"
+//	@Failure		404			{object}	ModbusErrorResponse				"Device not found"
+//	@Failure		503			{object}	ModbusErrorResponse				"Bus queue full"
+//	@Failure		504			{object}	ModbusErrorResponse				"Request waited too long in the bus queue"
 //	@Failure		401			{string}	string							"Unauthorized"
 //	@Router			/devices/{device}/discrete-inputs/{address} [get]
 func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
@@ -162,6 +170,10 @@ func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
 //	@Success		200			{object}	modbusclient.ReadRegistersResponse	"Holding registers successfully read"
 //	@Failure		400			{object}	ModbusErrorResponse					"Invalid request"
 //	@Failure		502			{object}	ModbusErrorResponse					"Modbus read failed"
+//	@Failure		403			{object}	ModbusErrorResponse					"Function code not allowed for the device"
+//	@Failure		404			{object}	ModbusErrorResponse					"Device not found"
+//	@Failure		503			{object}	ModbusErrorResponse					"Bus queue full"
+//	@Failure		504			{object}	ModbusErrorResponse					"Request waited too long in the bus queue"
 //	@Failure		401			{string}	string								"Unauthorized"
 //	@Router			/devices/{device}/holding-registers/{address} [get]
 func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
@@ -183,6 +195,10 @@ func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
 //	@Failure		400			{object}	ModbusErrorResponse					"Invalid request"
 //	@Success		200			{object}	modbusclient.ReadRegistersResponse	"Input registers successfully read"
 //	@Failure		502			{object}	ModbusErrorResponse					"Modbus read failed"
+//	@Failure		403			{object}	ModbusErrorResponse					"Function code not allowed for the device"
+//	@Failure		404			{object}	ModbusErrorResponse					"Device not found"
+//	@Failure		503			{object}	ModbusErrorResponse					"Bus queue full"
+//	@Failure		504			{object}	ModbusErrorResponse					"Request waited too long in the bus queue"
 //	@Failure		401			{string}	string								"Unauthorized"
 //	@Router			/devices/{device}/input-registers/{address} [get]
 func (app *App) HandleModbusReadInputRegisters() http.Handler {
@@ -205,6 +221,10 @@ func (app *App) HandleModbusReadInputRegisters() http.Handler {
 //	@Success		200		{object}	modbusclient.WriteResponse		"Coil successfully written"
 //	@Failure		400		{object}	ModbusErrorResponse				"Invalid request"
 //	@Failure		502		{object}	ModbusErrorResponse				"Modbus write failed"
+//	@Failure		403		{object}	ModbusErrorResponse				"Function code not allowed for the device"
+//	@Failure		404		{object}	ModbusErrorResponse				"Device not found"
+//	@Failure		503		{object}	ModbusErrorResponse				"Bus queue full"
+//	@Failure		504		{object}	ModbusErrorResponse				"Request waited too long in the bus queue"
 //	@Failure		401		{string}	string							"Unauthorized"
 //	@Router			/devices/{device}/coils/{address} [post]
 func (app *App) HandleModbusWriteSingleCoil() http.Handler {
@@ -257,6 +277,10 @@ func (app *App) HandleModbusWriteSingleCoil() http.Handler {
 //	@Success		200		{object}	modbusclient.WriteResponse			"Register successfully written"
 //	@Failure		400		{object}	ModbusErrorResponse					"Invalid request"
 //	@Failure		502		{object}	ModbusErrorResponse					"Modbus write failed"
+//	@Failure		403		{object}	ModbusErrorResponse					"Function code not allowed for the device"
+//	@Failure		404		{object}	ModbusErrorResponse					"Device not found"
+//	@Failure		503		{object}	ModbusErrorResponse					"Bus queue full"
+//	@Failure		504		{object}	ModbusErrorResponse					"Request waited too long in the bus queue"
 //	@Failure		401		{string}	string								"Unauthorized"
 //	@Router			/devices/{device}/holding-registers/{address} [post]
 func (app *App) HandleModbusWriteSingleRegister() http.Handler {
@@ -308,6 +332,10 @@ func (app *App) HandleModbusWriteSingleRegister() http.Handler {
 //	@Success		200		{object}	modbusclient.WriteResponse		"Coils successfully written"
 //	@Failure		400		{object}	ModbusErrorResponse				"Invalid request"
 //	@Failure		502		{object}	ModbusErrorResponse				"Modbus write failed"
+//	@Failure		403		{object}	ModbusErrorResponse				"Function code not allowed for the device"
+//	@Failure		404		{object}	ModbusErrorResponse				"Device not found"
+//	@Failure		503		{object}	ModbusErrorResponse				"Bus queue full"
+//	@Failure		504		{object}	ModbusErrorResponse				"Request waited too long in the bus queue"
 //	@Failure		401		{string}	string							"Unauthorized"
 //	@Router			/devices/{device}/coils [post]
 func (app *App) HandleModbusWriteMultipleCoils() http.Handler {
@@ -360,6 +388,10 @@ func (app *App) HandleModbusWriteMultipleCoils() http.Handler {
 //	@Success		200		{object}	modbusclient.WriteResponse			"Registers successfully written"
 //	@Failure		400		{object}	ModbusErrorResponse					"Invalid request"
 //	@Failure		502		{object}	ModbusErrorResponse					"Modbus write failed"
+//	@Failure		403		{object}	ModbusErrorResponse					"Function code not allowed for the device"
+//	@Failure		404		{object}	ModbusErrorResponse					"Device not found"
+//	@Failure		503		{object}	ModbusErrorResponse					"Bus queue full"
+//	@Failure		504		{object}	ModbusErrorResponse					"Request waited too long in the bus queue"
 //	@Failure		401		{string}	string								"Unauthorized"
 //	@Router			/devices/{device}/holding-registers [post]
 func (app *App) HandleModbusWriteMultipleRegisters() http.Handler {
@@ -573,10 +605,20 @@ func isValidationError(err error) bool {
 		errors.Is(err, modbusmanager.ErrValuesExceedRegisterLimit)
 }
 
+// statusForModbusError maps a manager error to the HTTP status of the response.
 func statusForModbusError(err error) int {
-	if isValidationError(err) {
+	switch {
+	case isValidationError(err):
 		return http.StatusBadRequest
+	case errors.Is(err, modbusmanager.ErrDeviceNotConfigured):
+		return http.StatusNotFound
+	case errors.Is(err, modbusmanager.ErrFunctionNotAllowed):
+		return http.StatusForbidden
+	case errors.Is(err, modbusmanager.ErrBusBusy):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, modbusmanager.ErrQueueTimeout):
+		return http.StatusGatewayTimeout
+	default:
+		return http.StatusBadGateway
 	}
-
-	return http.StatusBadGateway
 }

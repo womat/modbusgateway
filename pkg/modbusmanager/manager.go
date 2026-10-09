@@ -1,107 +1,151 @@
-// Package modbusmanager manages long-lived Modbus connections per configured device.
+// Package modbusmanager serializes the access to Modbus buses.
+//
+// Every physical bus - a serial port or a TCP endpoint - has exactly one worker goroutine that
+// owns the only client of that bus, so two requests never meet on the wire. Writes are queued
+// and executed in order, before waiting reads. Reads are answered from a short-lived cache when
+// possible, and identical reads that wait at the same time share one bus transaction.
+//
+// Devices are registered on a bus with their unit ID; several devices can share one bus.
 package modbusmanager
 
 import (
 	"errors"
 	"fmt"
-	"net"
+	"slices"
 	"sort"
-	"strconv"
-	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	simonmodbus "github.com/simonvetter/modbus"
 )
 
 var (
-	ErrManagerNotInitialized    = errors.New("modbus manager is not initialized")
-	ErrDeviceNameEmpty          = errors.New("device name must not be empty")
-	ErrManagerClosed            = errors.New("modbus manager is closed")
-	ErrDeviceAlreadyRegistered  = errors.New("device is already registered")
-	ErrDeviceNotRegistered      = errors.New("device is not registered")
-	ErrDeviceNotConfigured      = errors.New("device is not configured")
-	ErrTimeoutMustBePositive    = errors.New("timeout must be greater than zero")
-	ErrMissingTCPSettings       = errors.New("missing tcp settings")
-	ErrUnexpectedTCPSettings    = errors.New("unexpected tcp settings")
-	ErrTCPHostEmpty             = errors.New("tcp host must not be empty")
-	ErrTCPPortOutOfRange        = errors.New("tcp port is out of range")
-	ErrMissingSerialSettings    = errors.New("missing serial settings")
-	ErrUnexpectedSerialSettings = errors.New("unexpected serial settings")
-	ErrSerialPortEmpty          = errors.New("serial port must not be empty")
-	ErrSerialBaudRateInvalid    = errors.New("serial baud rate must be greater than zero")
-	ErrSerialDataBitsInvalid    = errors.New("serial data bits are invalid")
-	ErrUnsupportedSerialParity  = errors.New("unsupported serial parity")
-	ErrSerialStopBitsInvalid    = errors.New("serial stop bits are invalid")
-	ErrUnsupportedTransport     = errors.New("unsupported transport")
+	ErrManagerNotInitialized   = errors.New("modbus manager is not initialized")
+	ErrManagerClosed           = errors.New("modbus manager is closed")
+	ErrDeviceNameEmpty         = errors.New("device name must not be empty")
+	ErrDeviceAlreadyRegistered = errors.New("device is already registered")
+	ErrDeviceNotConfigured     = errors.New("device is not configured")
+	ErrBusNameEmpty            = errors.New("bus name must not be empty")
+	ErrBusAlreadyRegistered    = errors.New("bus is already registered")
+	ErrBusNotConfigured        = errors.New("bus is not configured")
+	ErrUnitIdOutOfRange        = errors.New("unit id must be 1-247")
+	ErrUnitIdInUse             = errors.New("unit id is already used on this bus")
+	ErrFunctionNotAllowed      = errors.New("function code is not allowed for this device")
+	ErrUnsupportedFunction     = errors.New("unsupported function code")
 )
 
-// DeviceConfig describes one named Modbus endpoint managed by the connection manager.
+// DefaultFunctions are the function codes a device allows when its configuration names none:
+// reading only.
+var DefaultFunctions = []uint8{1, 2, 3, 4}
+
+// SupportedFunctions are the function codes the manager can execute.
+var SupportedFunctions = []uint8{1, 2, 3, 4, 5, 6, 15, 16}
+
+// DeviceConfig describes one Modbus device on a registered bus.
 type DeviceConfig struct {
 	Name        string
 	Description string
-	Transport   string
-	DeviceID    uint8
-	Timeout     time.Duration
-	TCP         *TCPConfig
-	Serial      *SerialConfig
-}
-
-// TCPConfig contains network settings for Modbus TCP devices.
-type TCPConfig struct {
-	Host string
-	Port int
-}
-
-// SerialConfig contains line settings for Modbus RTU devices.
-type SerialConfig struct {
-	Port     string
-	BaudRate int
-	DataBits int
-	Parity   string
-	StopBits int
+	Bus         string        // name of a bus registered with RegisterBus
+	UnitId      uint8         // address of the device on its bus, 1-247
+	CacheTTL    time.Duration // how long a read stays valid in the cache; 0 = no cache
+	Functions   []uint8       // allowed function codes; empty = DefaultFunctions
 }
 
 // DeviceStatus reports the current manager view of one configured device.
 type DeviceStatus struct {
 	Name          string
 	Description   string
-	Transport     string
-	DeviceID      uint8
-	Connected     bool
+	Bus           string
+	Transport     string // type of the bus: tcp | rtu
+	UnitId        uint8
+	Functions     []uint8
+	Connected     bool // the bus connection is open
 	LastError     string
-	LastConnectAt time.Time
+	LastConnectAt time.Time // of the bus
 	LastSuccessAt time.Time
 	LastRequestAt time.Time
+	QueueLen      int // requests waiting on the bus
+	CacheHits     uint64
+	CacheMisses   uint64
 }
 
-// Manager owns one reusable Modbus client per configured device.
+// Manager owns the buses and the devices on them.
 type Manager struct {
 	mu      sync.RWMutex
-	devices map[string]*managedDevice
+	buses   map[string]*bus
+	devices map[string]*device
 	closed  bool
 }
 
-type managedDevice struct {
-	mu           sync.Mutex
-	clientConfig *simonmodbus.ClientConfiguration
-	client       *simonmodbus.ModbusClient
-	status       DeviceStatus
+type device struct {
+	cfg       DeviceConfig
+	bus       *bus
+	functions [256]bool
+
+	mu            sync.Mutex
+	lastError     string
+	lastSuccessAt time.Time
+	lastRequestAt time.Time
+
+	cacheHits   atomic.Uint64
+	cacheMisses atomic.Uint64
 }
 
 // New creates a new empty manager.
 func New() *Manager {
-	return &Manager{devices: make(map[string]*managedDevice)}
+	return &Manager{
+		buses:   make(map[string]*bus),
+		devices: make(map[string]*device),
+	}
 }
 
-// Register adds one managed device configuration and fails if the name already exists.
+// RegisterBus adds a bus and starts its worker. The connection is opened by Connect or by the
+// first request.
+func (m *Manager) RegisterBus(cfg BusConfig) error {
+	if cfg.Name == "" {
+		return ErrBusNameEmpty
+	}
+	newClient, err := clientFactory(cfg)
+	if err != nil {
+		return err
+	}
+	return m.addBus(cfg, newClient)
+}
+
+// addBus registers a bus with the given client factory; tests pass a fake.
+func (m *Manager) addBus(cfg BusConfig, newClient func() (busClient, error)) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.closed {
+		return ErrManagerClosed
+	}
+	if _, ok := m.buses[cfg.Name]; ok {
+		return fmt.Errorf("%w: %s", ErrBusAlreadyRegistered, cfg.Name)
+	}
+	m.buses[cfg.Name] = newBus(cfg, newClient)
+	return nil
+}
+
+// Register adds a device on a registered bus. The unit ID must be unique on that bus.
 func (m *Manager) Register(cfg DeviceConfig) error {
 	if cfg.Name == "" {
 		return ErrDeviceNameEmpty
 	}
-	clientConfig, err := buildClientConfiguration(cfg)
-	if err != nil {
-		return err
+	if cfg.UnitId < 1 || cfg.UnitId > 247 {
+		return fmt.Errorf("%w for device %q: %d", ErrUnitIdOutOfRange, cfg.Name, cfg.UnitId)
+	}
+	if len(cfg.Functions) == 0 {
+		cfg.Functions = DefaultFunctions
+	}
+	cfg.Functions = slices.Clone(cfg.Functions)
+	slices.Sort(cfg.Functions)
+
+	d := &device{cfg: cfg}
+	for _, fc := range cfg.Functions {
+		if !slices.Contains(SupportedFunctions, fc) {
+			return fmt.Errorf("%w for device %q: %d", ErrUnsupportedFunction, cfg.Name, fc)
+		}
+		d.functions[fc] = true
 	}
 
 	m.mu.Lock()
@@ -110,70 +154,64 @@ func (m *Manager) Register(cfg DeviceConfig) error {
 	if m.closed {
 		return ErrManagerClosed
 	}
-
 	if _, ok := m.devices[cfg.Name]; ok {
 		return fmt.Errorf("%w: %s", ErrDeviceAlreadyRegistered, cfg.Name)
 	}
-
-	m.devices[cfg.Name] = &managedDevice{
-		clientConfig: clientConfig,
-		status: DeviceStatus{
-			Name:        cfg.Name,
-			Description: cfg.Description,
-			Transport:   strings.ToLower(cfg.Transport),
-			DeviceID:    cfg.DeviceID,
-		},
-	}
-	return nil
-}
-
-// Remove closes and unregisters one managed device.
-func (m *Manager) Remove(name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.closed {
-		return ErrManagerClosed
-	}
-
-	device, ok := m.devices[name]
+	b, ok := m.buses[cfg.Bus]
 	if !ok {
-		return fmt.Errorf("%w: %s", ErrDeviceNotRegistered, name)
+		return fmt.Errorf("%w for device %q: %q", ErrBusNotConfigured, cfg.Name, cfg.Bus)
+	}
+	for _, other := range m.devices {
+		if other.bus == b && other.cfg.UnitId == cfg.UnitId {
+			return fmt.Errorf("%w: devices %q and %q on bus %q use unit id %d",
+				ErrUnitIdInUse, other.cfg.Name, cfg.Name, cfg.Bus, cfg.UnitId)
+		}
 	}
 
-	if err := device.close(); err != nil {
-		return fmt.Errorf("remove device %q: %w", name, err)
-	}
-
-	delete(m.devices, name)
+	d.bus = b
+	m.devices[cfg.Name] = d
 	return nil
 }
 
-// Connect establishes or refreshes the connection for one registered device.
-func (m *Manager) Connect(name string) error {
-	device, err := m.getDevice(name)
-	if err != nil {
-		return err
+// Connect opens the connection of every bus that is not open yet, all buses at the same time,
+// so an unreachable device delays the start by one timeout at most. It returns the errors of
+// the buses that could not be opened; those are retried on their next request.
+func (m *Manager) Connect() map[string]error {
+	m.mu.RLock()
+	buses := make([]*bus, 0, len(m.buses))
+	for _, b := range m.buses {
+		buses = append(buses, b)
 	}
+	m.mu.RUnlock()
 
-	if err := device.ensureConnected(); err != nil {
-		return fmt.Errorf("connect device %q: %w", name, err)
+	var (
+		mu     sync.Mutex
+		wg     sync.WaitGroup
+		failed = make(map[string]error)
+	)
+	for _, b := range buses {
+		wg.Go(func() {
+			if err := b.connect(); err != nil {
+				mu.Lock()
+				failed[b.cfg.Name] = err
+				mu.Unlock()
+			}
+		})
 	}
-
-	return nil
+	wg.Wait()
+	return failed
 }
 
 // Status returns the current status for one registered device.
 func (m *Manager) Status(name string) (DeviceStatus, error) {
-	device, err := m.getDeviceAny(name)
+	d, err := m.device(name)
 	if err != nil {
 		return DeviceStatus{}, err
 	}
-
-	return device.snapshotStatus(), nil
+	return d.status(), nil
 }
 
-// ListStatus returns the current status for all registered devices.
+// ListStatus returns the current status for all registered devices, sorted by name.
 func (m *Manager) ListStatus() []DeviceStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -186,195 +224,100 @@ func (m *Manager) ListStatus() []DeviceStatus {
 
 	statuses := make([]DeviceStatus, 0, len(names))
 	for _, name := range names {
-		statuses = append(statuses, m.devices[name].snapshotStatus())
+		statuses = append(statuses, m.devices[name].status())
 	}
-
 	return statuses
 }
 
-// Close closes all managed device connections.
+// Close stops the workers and closes all bus connections. Requests still waiting fail with
+// ErrManagerClosed.
 func (m *Manager) Close() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if m.closed {
+		m.mu.Unlock()
 		return nil
 	}
-
-	var firstErr error
-	for _, device := range m.devices {
-		if err := device.close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-
 	m.closed = true
-	return firstErr
+	buses := make([]*bus, 0, len(m.buses))
+	for _, b := range m.buses {
+		buses = append(buses, b)
+	}
+	m.mu.Unlock()
+
+	var errs error
+	for _, b := range buses {
+		errs = errors.Join(errs, b.close())
+	}
+	return errs
 }
 
-func (m *Manager) getDevice(name string) (*managedDevice, error) {
-	device, err := m.getDeviceAny(name)
-	if err != nil {
-		return nil, err
+func (m *Manager) device(name string) (*device, error) {
+	if name == "" {
+		return nil, ErrDeviceNameEmpty
 	}
 
-	return device, nil
-}
-
-func (m *Manager) getDeviceAny(name string) (*managedDevice, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if m.closed {
 		return nil, ErrManagerClosed
 	}
-
-	device, ok := m.devices[name]
+	d, ok := m.devices[name]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrDeviceNotConfigured, name)
 	}
-
-	return device, nil
+	return d, nil
 }
 
-func (d *managedDevice) ensureConnected() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.ensureConnectedLocked()
-}
-
-func (d *managedDevice) ensureConnectedLocked() error {
-	if d.client != nil {
-		return nil
+// allow returns ErrFunctionNotAllowed unless the device allows function code fc.
+func (d *device) allow(fc uint8) error {
+	if !d.functions[fc] {
+		return fmt.Errorf("%w: FC%d on device %q", ErrFunctionNotAllowed, fc, d.cfg.Name)
 	}
-
-	client, err := newModbusClient(d.status, d.clientConfig)
-	if err != nil {
-		d.status.Connected = false
-		d.status.LastError = err.Error()
-		return err
-	}
-	if err = client.Open(); err != nil {
-		d.status.Connected = false
-		d.status.LastError = err.Error()
-		return err
-	}
-
-	d.client = client
-	d.status.Connected = true
-	d.status.LastError = ""
-	d.status.LastConnectAt = time.Now().UTC()
 	return nil
 }
 
-func (d *managedDevice) close() error {
+// record notes the outcome of one request for the status.
+func (d *device) record(err error, read, cached bool) {
+	if read {
+		if cached {
+			d.cacheHits.Add(1)
+		} else {
+			d.cacheMisses.Add(1)
+		}
+	}
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.closeLocked()
-}
-
-func (d *managedDevice) closeLocked() error {
-	if d.client == nil {
-		d.status.Connected = false
-		return nil
-	}
-
-	err := d.client.Close()
-	d.client = nil
-	d.status.Connected = false
+	now := time.Now().UTC()
+	d.lastRequestAt = now
 	if err != nil {
-		d.status.LastError = err.Error()
+		d.lastError = err.Error()
+		return
 	}
-	return err
+	d.lastError = ""
+	d.lastSuccessAt = now
 }
 
-func (d *managedDevice) snapshotStatus() DeviceStatus {
+func (d *device) status() DeviceStatus {
+	connected, lastConnectAt := d.bus.connection()
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
-	status := d.status
-	status.Connected = d.client != nil && d.status.Connected
-	return status
-}
-
-func newModbusClient(device DeviceStatus, conf *simonmodbus.ClientConfiguration) (*simonmodbus.ModbusClient, error) {
-	client, err := simonmodbus.NewClient(conf)
-	if err != nil {
-		return nil, fmt.Errorf("configure client for device %q: %w", device.Name, err)
-	}
-	if err = client.SetUnitId(device.DeviceID); err != nil {
-		return nil, fmt.Errorf("set unit id for device %q: %w", device.Name, err)
-	}
-
-	return client, nil
-}
-
-func buildClientConfiguration(device DeviceConfig) (*simonmodbus.ClientConfiguration, error) {
-	if device.Timeout <= 0 {
-		return nil, fmt.Errorf("%w for device %q", ErrTimeoutMustBePositive, device.Name)
-	}
-
-	conf := &simonmodbus.ClientConfiguration{Timeout: device.Timeout}
-
-	switch strings.ToLower(device.Transport) {
-	case "tcp":
-		if device.TCP == nil {
-			return nil, fmt.Errorf("%w for device %q", ErrMissingTCPSettings, device.Name)
-		}
-		if device.Serial != nil {
-			return nil, fmt.Errorf("%w for device %q", ErrUnexpectedSerialSettings, device.Name)
-		}
-		if device.TCP.Host == "" {
-			return nil, fmt.Errorf("%w for device %q", ErrTCPHostEmpty, device.Name)
-		}
-		if device.TCP.Port < 1 || device.TCP.Port > 65535 {
-			return nil, fmt.Errorf("%w for device %q: %d", ErrTCPPortOutOfRange, device.Name, device.TCP.Port)
-		}
-		conf.URL = "tcp://" + net.JoinHostPort(device.TCP.Host, strconv.Itoa(device.TCP.Port))
-	case "rtu":
-		if device.Serial == nil {
-			return nil, fmt.Errorf("%w for device %q", ErrMissingSerialSettings, device.Name)
-		}
-		if device.TCP != nil {
-			return nil, fmt.Errorf("%w for device %q", ErrUnexpectedTCPSettings, device.Name)
-		}
-		if device.Serial.Port == "" {
-			return nil, fmt.Errorf("%w for device %q", ErrSerialPortEmpty, device.Name)
-		}
-		if device.Serial.BaudRate <= 0 {
-			return nil, fmt.Errorf("%w for device %q", ErrSerialBaudRateInvalid, device.Name)
-		}
-		if device.Serial.DataBits < 5 || device.Serial.DataBits > 8 {
-			return nil, fmt.Errorf("%w for device %q: %d", ErrSerialDataBitsInvalid, device.Name, device.Serial.DataBits)
-		}
-		if device.Serial.StopBits != 1 && device.Serial.StopBits != 2 {
-			return nil, fmt.Errorf("%w for device %q: %d", ErrSerialStopBitsInvalid, device.Name, device.Serial.StopBits)
-		}
-		parity, err := mapParity(device.Serial.Parity)
-		if err != nil {
-			return nil, fmt.Errorf("%w for device %q", err, device.Name)
-		}
-		conf.URL = "rtu://" + device.Serial.Port
-		conf.Speed = uint(device.Serial.BaudRate)
-		conf.DataBits = uint(device.Serial.DataBits)
-		conf.Parity = parity
-		conf.StopBits = uint(device.Serial.StopBits)
-	default:
-		return nil, fmt.Errorf("%w %q for device %q", ErrUnsupportedTransport, device.Transport, device.Name)
-	}
-
-	return conf, nil
-}
-
-func mapParity(parity string) (uint, error) {
-	switch strings.ToUpper(parity) {
-	case "N":
-		return simonmodbus.PARITY_NONE, nil
-	case "E":
-		return simonmodbus.PARITY_EVEN, nil
-	case "O":
-		return simonmodbus.PARITY_ODD, nil
-	default:
-		return 0, ErrUnsupportedSerialParity
+	return DeviceStatus{
+		Name:          d.cfg.Name,
+		Description:   d.cfg.Description,
+		Bus:           d.cfg.Bus,
+		Transport:     d.bus.cfg.Type,
+		UnitId:        d.cfg.UnitId,
+		Functions:     slices.Clone(d.cfg.Functions),
+		Connected:     connected,
+		LastError:     d.lastError,
+		LastConnectAt: lastConnectAt,
+		LastSuccessAt: d.lastSuccessAt,
+		LastRequestAt: d.lastRequestAt,
+		QueueLen:      d.bus.queueLen(),
+		CacheHits:     d.cacheHits.Load(),
+		CacheMisses:   d.cacheMisses.Load(),
 	}
 }

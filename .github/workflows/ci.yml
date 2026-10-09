@@ -1,0 +1,95 @@
+# Test, vet and build on every push and pull request.
+#
+# Actions are pinned to a commit SHA, with the release it belongs to in a
+# comment; dependabot (.github/dependabot.yml) proposes updates.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # The tests run natively on the runner (linux/amd64): arm test binaries could
+  # not be executed there. They need no hardware: Modbus devices are emulated with
+  # mbserver, the serial bus of the RTU listener test with a socat pty pair.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install socat
+        run: sudo apt-get install -y --no-install-recommends socat
+
+      - name: Test with race detector
+        run: make test
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The three targets that are actually released. armv6 is the default
+        # deployment target (it runs on every Pi, and a Pi Zero needs it), so it
+        # must not be the one that goes untested.
+        include:
+          - goarch: arm
+            goarm: "6"
+          - goarch: arm
+            goarm: "7"
+          - goarch: arm64
+            goarm: ""
+    env:
+      GOOS: linux
+      GOARCH: ${{ matrix.goarch }}
+      GOARM: ${{ matrix.goarm }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # app/certs/ is gitignored but embedded by app/webservices.go.
+      - name: Generate development TLS certificates
+        run: make ensure_dev_certs
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      # The Swagger UI sits behind a build tag, so a plain build never compiles it.
+      - name: Build with Swagger UI
+        run: go build -tags swagger ./...
+
+      # govulncheck must be BUILT for the runner but ANALYSE the target
+      # architecture. Installing it under the job-level GOOS/GOARCH would produce
+      # an arm binary the runner cannot execute ("exec format error"), so the
+      # install step clears them - empty values fall back to the host - while the
+      # scan step keeps them and so inspects the matrix target.
+      - name: Install govulncheck
+        env:
+          GOOS: ""
+          GOARCH: ""
+          GOARM: ""
+        # Pinned rather than @latest, so a new release cannot turn CI red without a
+        # change here. dependabot does not see go install lines - raise it by hand.
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+      # Exits non-zero when this code actually calls a vulnerable symbol.
+      # Advisories that only sit in required modules are reported but do not
+      # fail the build, which keeps the signal on what is reachable from here.
+      - name: Vulnerability scan
+        run: $(go env GOPATH)/bin/govulncheck ./...

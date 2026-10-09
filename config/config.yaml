@@ -1,5 +1,9 @@
 # =============================================================================
-# app configuration
+# modbusgateway configuration
+#
+# ${VAR} is replaced with the environment variable VAR (only this form, a bare
+# "$" stays as it is), e.g. apiKey: ${MODBUSGATEWAY_API_KEY}.
+# Unknown keys are an error, so a typo cannot silently fall back to a default.
 # =============================================================================
 
 # logLevel defines the minimum log level.
@@ -12,11 +16,13 @@ logLevel: info
 logDestination: stdout
 
 # environment: dev | prod
+# dev falls back to the embedded self-signed certificate when certFile is
+# missing; prod refuses to start without certFile.
 env: dev
 
 
 # =============================================================================
-# Webserver configuration (HTTPS)
+# Webserver configuration (HTTPS REST API)
 # =============================================================================
 webserver:
   # Host address the HTTPS server listens on (0.0.0.0 = all interfaces)
@@ -29,79 +35,112 @@ webserver:
   apiKey: changeme!
 
   # TLS private key file
-  keyFile: /opt/demo_app/etc/key.pem
+  keyFile: /opt/modbusgateway/etc/key.pem
 
   # TLS certificate file
-  certFile: /opt/demo_app/etc/cert.pem
+  certFile: /opt/modbusgateway/etc/cert.pem
 
   # Blocked IP addresses or networks (empty = none blocked)
   # Examples: 192.168.0.1, 192.168.0.0/16, 10.0.0.0/8
   blockedIPs: []
-  #  - 192.168.0.1
-  #  - 192.168.0.0/16
 
   # Allowed IP addresses or networks (empty = all allowed)
   # Note: ::1 is the IPv6 loopback address
   # Examples: 127.0.0.1, ::1, 192.168.0.0/16
   allowedIPs: []
-  #  - 127.0.0.1
-  #  - ::1
-  #  - 192.168.0.0/16
 
 # =============================================================================
-# Optional Modbus TCP gateway server
+# Buses: the physical connections
 # =============================================================================
-# When enabled, this process also listens as a Modbus TCP server and forwards
-# incoming read requests (FC1-FC4) to configured downstream devices.
-modbusServer:
-  enabled: false
-  listenHost: 0.0.0.0
-  listenPort: 1502
-
-# =============================================================================
-# Modbus devices exposed through the API
-# =============================================================================
-# Each top-level key under devices is the public device name used by the API,
-# e.g. GET /devices/fronius-smartmeter/input-registers/30001?quantity=2
+# Every bus has one queue: requests of all clients (REST and Modbus listeners)
+# reach it one after the other, writes before waiting reads.
 #
-# Common fields:
-# - description: free-text label for humans
-# - transport: tcp | rtu
-# - deviceId: Modbus slave/unit identifier on that bus
-# - gatewayDeviceId: optional external Modbus unit ID of this gateway
-#   Clients use this ID against the gateway server. It is independent from
-#   deviceId, which remains the slave/unit ID of the real downstream device.
-# - timeout: request timeout as Go duration, e.g. 1500ms, 2s
-#
-# Transport-specific blocks:
-# - tcp: required when transport=tcp
-# - serial: required when transport=rtu
-devices:
-  # Example RTU device on a serial bus.
-  fronius-smartmeter:
-    description: Main power meter
-    transport: rtu
-    deviceId: 1
-    gatewayDeviceId: 101
-    timeout: 1s
-    serial:
-      # Serial device path, e.g. /dev/ttyUSB0 or /dev/ttyS0
+# type      - rtu | tcp
+# timeout   - response timeout of one request, Go duration (e.g. 1500ms, 2s)
+# queueSize - requests that may wait on the bus (default 64); a full queue
+#             answers "busy" (REST 503, Modbus exception 6)
+# rtu       - port, baudRate, dataBits, parity, stopBits (default 9600 8N1)
+# tcp       - host, port (default 502)
+buses:
+  rs485:
+    type: rtu
+    timeout: 1500ms
+    rtu:
       port: /dev/ttyUSB0
-      # Typical serial settings from the device manual.
       baudRate: 9600
       dataBits: 8
-      parity: N
+      parity: N          # N | E | O
       stopBits: 1
 
-  # Example Modbus TCP device reachable via IP and port 502.
-  smartfox:
-    description: PV controller
-    transport: tcp
-    deviceId: 1
-    gatewayDeviceId: 102
+  smartfox-lan:
+    type: tcp
     timeout: 2s
     tcp:
-      # Hostname or IP address of the Modbus TCP endpoint.
-      host: smartfox.fritz.box
-      # Default Modbus TCP port is usually 502.
+      host: smartfox.example.lan
       port: 502
+
+# =============================================================================
+# Devices
+# =============================================================================
+# The key is the device name in the REST API, e.g.
+#   GET /devices/fronius-smartmeter/holding-registers/40000?quantity=2
+#
+# description - free text
+# bus         - name of an entry in buses; several devices can share a bus
+# unitId      - Modbus address of the device on its bus (1-247), unique per bus
+# functions   - function codes the device allows, on every interface:
+#               FC1 FC2 FC3 FC4 (read), FC5 FC6 FC15 FC16 (write).
+#               Default [FC1, FC2, FC3, FC4]: reading only.
+# cacheTTL    - how long a read is served from the cache, Go duration.
+#               Default 1s on an rtu bus, 0s (no cache) on a tcp bus.
+#               A write drops the cached values it changes.
+# gateway     - offer the device on the Modbus listener of the other transport:
+#               a device on an rtu bus on listen.tcp, a device on a tcp bus on
+#               listen.rtu. unitId is the unit ID clients use there (1-247,
+#               unique per listener), independent of the unitId on the bus.
+devices:
+  fronius-smartmeter:
+    description: Main power meter
+    bus: rs485
+    unitId: 1
+    functions: [FC3, FC4]
+    cacheTTL: 1s
+    gateway: { unitId: 11 }
+
+  heatpump:
+    description: Heat pump controller
+    bus: rs485
+    unitId: 2
+    functions: [FC1, FC2, FC3, FC4, FC5, FC6, FC15, FC16]
+    gateway: { unitId: 12 }
+
+  smartfox:
+    description: PV controller
+    bus: smartfox-lan
+    unitId: 1
+    gateway: { unitId: 31 }
+
+# =============================================================================
+# Modbus listeners of the gateway
+# =============================================================================
+# A listener is active when its block is present: delete or comment out a
+# block to turn it off. Modbus has no authentication - bind listen.tcp to a
+# trusted interface or protect it with a firewall.
+listen:
+  # Modbus TCP: TCP clients reach the devices on rtu buses (default 0.0.0.0:1502)
+  tcp:
+    host: 0.0.0.0
+    port: 1502
+
+  # Modbus RTU on a serial port of its own: a client on that bus reaches the
+  # devices on tcp buses. The client's timeout must cover the round trip to
+  # the TCP device.
+  # rtu:
+  #   port: /dev/ttyUSB1
+  #   baudRate: 9600
+  #   dataBits: 8
+  #   parity: N
+  #   stopBits: 1
+  #   # Silence that ends a request (default: t3.5 of the Modbus specification,
+  #   # ~4ms at 9600 baud). USB adapters and the Pi UART need 20ms-40ms.
+  #   interFrameDelay: 20ms

@@ -1,0 +1,103 @@
+# GoReleaser configuration for modbusgateway.
+#
+# A release is created by pushing a semver tag:
+#
+#   make release TAG=v1.7.0
+#
+# .github/workflows/release.yml then runs `goreleaser release --clean`.
+# To try it out locally without publishing:
+#
+#   goreleaser release --snapshot --clean
+version: 2
+
+project_name: modbusgateway
+
+before:
+  hooks:
+    # app/webservices.go embeds app/certs/dev_{cert,key}.pem, but that directory
+    # is gitignored. GoReleaser calls `go build` directly instead of the make
+    # build_* targets, so the certs must be generated up front or //go:embed fails.
+    - make ensure_dev_certs
+    - go mod download
+
+builds:
+  # Raspberry Pi compatibility (see the table in the Makefile):
+  #   arm64 -> Pi 3/4/5/Zero 2 W with a 64-bit OS
+  #   armv7 -> Pi 2/3/4/5/Zero 2 W with a 32-bit OS
+  #   armv6 -> Pi 1 and Zero (1st gen)
+  - id: modbusgateway
+    main: ./cmd/main.go
+    binary: modbusgateway
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
+    ignore:
+      - goos: linux
+        goarch: arm64
+        goarm: "6"
+      - goos: linux
+        goarch: arm64
+        goarm: "7"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X 'main.buildDate={{ .Date }}'
+      - -X 'main.buildCommit={{ .ShortCommit }}'
+      - -X 'github.com/womat/modbusgateway/app.VERSION={{ .Version }}'
+
+archives:
+  - id: modbusgateway
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}"
+    files:
+      # README.md carries the third-party license overview, LICENSE the MIT terms;
+      # both have to travel with every distributed binary.
+      - README.md
+      - LICENSE
+      - config/config.yaml
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge branch"
+      - "^Merge pull request"
+  groups:
+    - title: Features
+      regexp: '(?i)^feat(\(.*\))?[:(]'
+      order: 0
+    - title: Bug fixes
+      regexp: '(?i)^(fix|bugfix)(\(.*\))?[:(]'
+      order: 1
+    - title: Documentation
+      regexp: '(?i)^(docu|docs)(\(.*\))?[:(]'
+      order: 2
+    - title: Maintenance
+      regexp: '(?i)^(chore|refactor)(\(.*\))?[:(]'
+      order: 3
+    - title: Other
+      order: 99
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Which file do I need?
+
+    | Archive | Raspberry Pi model |
+    |---|---|
+    | `linux_arm64`  | Pi 3 / 4 / 5 / Zero 2 W with a 64-bit OS |
+    | `linux_armv7`  | Pi 2 / 3 / 4 / 5 / Zero 2 W with a 32-bit OS |
+    | `linux_armv6`  | Pi 1 and Zero (1st gen) |

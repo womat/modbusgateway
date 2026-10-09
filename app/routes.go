@@ -58,7 +58,9 @@ func (app *App) SetupRoutes() {
 	mux.Handle("POST /devices/{device}/holding-registers", web.WithAuth(app.HandleModbusWriteMultipleRegisters(), webCfg))        // Function code 16: Write Multiple Registers
 
 	// Apply global middleware: CORS + IP filter
-	handler := web.WithCORS(mux)
+	// CORS advertises only the methods the API serves: GET for reads, POST for writes and the
+	// preflight OPTIONS.
+	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodPost, http.MethodOptions))
 	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
 	handler = WithLogging(handler)
 	app.web.Handler = handler

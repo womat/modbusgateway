@@ -110,8 +110,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -176,8 +200,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -245,8 +293,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -311,8 +383,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -375,8 +471,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -441,8 +561,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -510,8 +654,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus write failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -576,8 +744,32 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "403": {
+                        "description": "Function code not allowed for the device",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Device not found",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
                     "502": {
                         "description": "Modbus read failed",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Bus queue full",
+                        "schema": {
+                            "$ref": "#/definitions/app.ModbusErrorResponse"
+                        }
+                    },
+                    "504": {
+                        "description": "Request waited too long in the bus queue",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }
@@ -798,7 +990,17 @@ const docTemplate = `{
         "modbusclient.DeviceStatusResponse": {
             "type": "object",
             "properties": {
+                "bus": {
+                    "type": "string"
+                },
+                "cacheHits": {
+                    "type": "integer"
+                },
+                "cacheMisses": {
+                    "type": "integer"
+                },
                 "connected": {
+                    "description": "the bus connection is open",
                     "type": "boolean"
                 },
                 "description": {
@@ -806,6 +1008,13 @@ const docTemplate = `{
                 },
                 "device": {
                     "type": "string"
+                },
+                "functions": {
+                    "description": "allowed function codes, e.g. [\"FC3\",\"FC4\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "lastConnectAt": {
                     "type": "string"
@@ -818,6 +1027,10 @@ const docTemplate = `{
                 },
                 "lastSuccessAt": {
                     "type": "string"
+                },
+                "queueLen": {
+                    "description": "requests waiting on the bus",
+                    "type": "integer"
                 },
                 "transport": {
                     "type": "string"
@@ -835,6 +1048,10 @@ const docTemplate = `{
                 },
                 "addressHex": {
                     "type": "string"
+                },
+                "cached": {
+                    "description": "answered from the cache, without a bus transaction",
+                    "type": "boolean"
                 },
                 "dataHex": {
                     "type": "string"
@@ -867,6 +1084,10 @@ const docTemplate = `{
                 },
                 "addressHex": {
                     "type": "string"
+                },
+                "cached": {
+                    "description": "answered from the cache, without a bus transaction",
+                    "type": "boolean"
                 },
                 "dataHex": {
                     "type": "string"

@@ -1,0 +1,74 @@
+# Builds and publishes a GitHub release whenever a semver tag is pushed.
+#
+#   make release TAG=v1.7.0
+#
+# The tag is the single source of truth for the version: GoReleaser injects it
+# into app.VERSION via -ldflags, so the binary always reports the tag it was cut from.
+#
+# Before anything is published the tagged commit is tested, vetted and scanned
+# again: a release must not depend on whether the CI run of that commit passed.
+# Actions are pinned to a commit SHA, with the release in a comment.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # GoReleaser creates the release and uploads the archives
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # GoReleaser needs the full history to build the changelog
+
+      # Releases are cut from main only. `make release` enforces this locally, but
+      # a hand-made `git tag` bypasses it, so the workflow refuses to publish a
+      # tag whose commit never reached main.
+      - name: Verify the tag is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at a commit that is not on main. Push the commit to main first, then re-tag."
+            exit 1
+          fi
+          echo "$GITHUB_REF_NAME is on main."
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install socat
+        run: sudo apt-get install -y --no-install-recommends socat
+
+      # Runs natively on the runner; also generates the embedded dev certificates.
+      - name: Test with race detector
+        run: make test
+
+      # Vetted for the deployment target, a Pi in 32-bit mode.
+      - name: Vet
+        env:
+          GOOS: linux
+          GOARCH: arm
+          GOARM: "6"
+        run: |
+          go vet ./...
+          go vet -tags swagger ./...
+
+      # Pinned like in ci.yml. Built for the runner, analysing the deployment target.
+      - name: Vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          GOOS=linux GOARCH=arm GOARM=6 "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
