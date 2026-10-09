@@ -2,6 +2,10 @@
 
 🇬🇧 [Full documentation in English](README.md)
 
+<p align="center">
+  <img src="docs/screenshots/web-ui.png" width="640" alt="Weboberfläche von modbusgateway mit den Clients je Eingang, dem Gateway, den Bussen mit ihren Geräten und dem Live-Protokoll">
+</p>
+
 **modbusgateway bringt Modbus-Geräte ins Netzwerk: eine HTTPS-REST-API und ein Modbus-RTU⇄TCP-Gateway
 für den Raspberry Pi, mit einer Warteschlange pro Bus.**
 

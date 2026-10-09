@@ -44,6 +44,15 @@ Swagger UI is behind the `swagger` build tag (`app/swagger.go` vs `app/swagger_s
 docs/generate.sh   # from the project root; needs swaggo/swag v1.16.6
 ```
 
+### Screenshots
+
+The README screenshots and the social preview are rendered from the real `app/ui/index.html` with a mocked `/health`, `/devices` and `/activity` in headless Chromium. Re-run after visible UI changes; the social preview is uploaded by hand in the repository settings:
+
+```sh
+docker run --rm -v "$PWD":/src -w /src mcr.microsoft.com/playwright/python:v1.52.0-noble \
+  sh -c 'pip install -q --break-system-packages playwright==1.52.0 && python3 docs/screenshots/capture.py'
+```
+
 ## Architecture
 
 Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layers never import upward.
@@ -61,7 +70,7 @@ Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layer
 - **`app/service/modbusclient`** — the REST-facing service: request validation and JSON mapping (`values`, `dataHex`, `cached`, device status with `functions` as `["FC3"]`).
 - **`app/routes.go` / `api_*.go`** — `http.ServeMux` with method patterns: `GET` reads, `PUT` writes with the start address in the path, the body picks the function code (`value` → FC5/FC6, `values` → FC15/FC16, so a single-element `values` reaches devices that accept only FC15/FC16); `web.WithAuth` (`X-API-Key`) per route, middleware `WithLogging` → `WithIPFilter` → `WithCORS`. `statusForModbusError` maps 400/403/404/502/503/504.
 - **`app/api_activity.go`** — `GET /activity`: listeners, clients (merged with the open TCP connections), buses and the recent transactions, for the web page.
-- **`app/ui/index.html` / `api_ui.go`** — the web page at `GET /{$}`, embedded, public (no data), CSP limited to inline script/style and this server; same header, footer, login, logo style and favicon rule as the sibling pages. It polls `/health`, `/devices` and `/activity` every 2 s and never shows register values. Screenshots in `docs/images/web-ui-{light,dark}.png` (sample data).
+- **`app/ui/index.html` / `api_ui.go`** — the web page at `GET /{$}`, embedded, public (no data), CSP limited to inline script/style and this server; same header, footer, login, logo style and favicon rule as the sibling pages. It polls `/health`, `/devices` and `/activity` every 2 s and never shows register values. Screenshots in `docs/screenshots/` and `docs/social-preview.png`, rendered with sample data (see Screenshots).
 - **`app/webservices.go`** — HTTPS only; the embedded dev cert is used only with `env: dev`, because its key ships in every release.
 
 **External dependencies:** `github.com/simonvetter/modbus` (client side, TCP and RTU), `github.com/womat/mbserver` (listeners, TCP and RTU server), `github.com/womat/golib` (`web`, `xlog`). Read them in `$(go env GOMODCACHE)` when behavior is unclear.

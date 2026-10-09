@@ -11,6 +11,15 @@ Raspberry Pi, with one queue per bus.**
 
 🇩🇪 [Deutsche Kurzfassung](README.de.md)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/web-ui-dark.png">
+    <img src="docs/screenshots/web-ui.png" width="640" alt="modbusgateway web page: REST, Modbus TCP and Modbus RTU clients by listener, the gateway, the rs485 and smartfox-lan buses with a tap per device, and the live protocol of the last transactions">
+  </picture>
+  &nbsp;
+  <img src="docs/screenshots/web-ui-phone.png" width="180" alt="The same page on a phone">
+</p>
+
 > **Got a meter or a heat pump on RS485?** The [Quick start](#quick-start) gets you from download to
 > the first register read in about ten minutes.
 
@@ -28,13 +37,6 @@ makes the devices usable from everywhere on your network:
   request after the other, writes first, and reads are answered from a **short-lived cache**.
 
 No cloud, no database, no runtime: a single binary, configured with one YAML file.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/web-ui-dark.png">
-  <img src="docs/images/web-ui-light.png" alt="The modbusgateway web page: REST, Modbus TCP and Modbus RTU clients on the left, the gateway, the rs485 and smartfox-lan buses with their devices on the right, and the live protocol of the last transactions" width="800">
-</picture>
-
-*The built-in [web page](#web-page) (sample data).*
 
 ---
 
