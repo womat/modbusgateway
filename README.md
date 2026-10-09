@@ -159,8 +159,8 @@ flowchart LR
 
 | Client                     | Device on | Interface                                   |
 |----------------------------|-----------|---------------------------------------------|
-| REST                       | RTU bus   | `GET`/`POST /devices/{device}/...`          |
-| REST                       | TCP bus   | `GET`/`POST /devices/{device}/...`          |
+| REST                       | RTU bus   | `GET`/`PUT /devices/{device}/...`           |
+| REST                       | TCP bus   | `GET`/`PUT /devices/{device}/...`           |
 | Modbus TCP                 | RTU bus   | `listen.tcp`, unit ID from `gateway.unitId` |
 | Modbus RTU (client on bus) | TCP bus   | `listen.rtu`, unit ID from `gateway.unitId` |
 
@@ -226,26 +226,39 @@ a logger can poll the same meter without disturbing each other.
 | GET    | `/devices/{device}/discrete-inputs/{address}?quantity=N`   | API key | Read discrete inputs (`FC2`)              |
 | GET    | `/devices/{device}/holding-registers/{address}?quantity=N` | API key | Read holding registers (`FC3`)            |
 | GET    | `/devices/{device}/input-registers/{address}?quantity=N`   | API key | Read input registers (`FC4`)              |
-| POST   | `/devices/{device}/coils/{address}`                        | API key | Write single coil (`FC5`)                 |
-| POST   | `/devices/{device}/holding-registers/{address}`            | API key | Write single holding register (`FC6`)     |
-| POST   | `/devices/{device}/coils`                                  | API key | Write multiple coils (`FC15`)             |
-| POST   | `/devices/{device}/holding-registers`                      | API key | Write multiple holding registers (`FC16`) |
+| PUT    | `/devices/{device}/coils/{address}`                        | API key | Write coils (`FC5` or `FC15`)             |
+| PUT    | `/devices/{device}/holding-registers/{address}`            | API key | Write holding registers (`FC6` or `FC16`) |
 
-Authentication via the `X-API-Key` header. Addresses are 0-based, decimal or `0x`-prefixed hex.
+Authentication via the `X-API-Key` header. Addresses are 0-based, decimal or `0x`-prefixed hex; for
+a write the address is the start address.
 
-A read answers `dataHex` - the raw bytes, two per register, high byte first - and `cached`, `true`
-when it came from the cache without a bus transaction:
+A read answers `values` - one number per register (unsigned) or one `true`/`false` per coil or input
+-, `dataHex` - the raw bytes as on the wire: two per register, high byte first; for coils and inputs
+eight per byte, the first in the lowest bit - and `cached`, `true` when it came from the cache without
+a bus transaction:
 
 ```json
 {"device": "meter", "transport": "rtu", "unitId": 2, "functionCode": 3, "address": 4096,
- "addressHex": "0x1000", "quantity": 2, "dataHex": "00038A40", "duration": 0.041, "cached": false}
+ "addressHex": "0x1000", "quantity": 2, "values": [3, 35392], "dataHex": "00038A40",
+ "duration": 0.041, "cached": false}
 ```
+
+A write takes either `value` or `values`, and that picks the function code:
+
+| Body                      | Coils  | Holding registers |
+|---------------------------|--------|-------------------|
+| `{"value": x}`            | `FC5`  | `FC6`             |
+| `{"values": [x, y, ...]}` | `FC15` | `FC16`            |
+
+`values` with a single element writes one value with `FC15`/`FC16` - for devices that accept only the
+multiple-write function codes, which many do. The answer echoes the response of the device in
+`dataHex`.
 
 Errors are returned as `{"error": "..."}`:
 
 | Status | Reason                                                     |
 |--------|------------------------------------------------------------|
-| 400    | invalid request, e.g. quantity 0 or above the Modbus limit |
+| 400    | invalid request, e.g. quantity 0 or above the Modbus limit, or a write body with neither or both of `value` and `values` |
 | 403    | the function code is not in `functions` of the device      |
 | 404    | the device is not configured                               |
 | 502    | the device answered with an exception or did not answer    |
@@ -261,14 +274,14 @@ curl -k -H "X-Api-Key: your-api-key" https://my-pi:8443/devices
 curl -k -H "X-Api-Key: your-api-key" "https://my-pi:8443/devices/meter/input-registers/0x100?quantity=2"
 
 # Writes need the function code in functions of the device
-curl -k -X POST -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
-  -d '{"value":1234}' https://my-pi:8443/devices/heatpump/holding-registers/10
-curl -k -X POST -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
-  -d '{"address":"0x64","values":[10,20,30]}' https://my-pi:8443/devices/heatpump/holding-registers
-curl -k -X POST -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
-  -d '{"value":true}' https://my-pi:8443/devices/heatpump/coils/5
-curl -k -X POST -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
-  -d '{"address":"0x14","values":[true,false,true,true]}' https://my-pi:8443/devices/heatpump/coils
+curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+  -d '{"value":1234}' https://my-pi:8443/devices/heatpump/holding-registers/10                 # FC6
+curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+  -d '{"values":[10,20,30]}' https://my-pi:8443/devices/heatpump/holding-registers/0x64        # FC16
+curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+  -d '{"value":true}' https://my-pi:8443/devices/heatpump/coils/5                              # FC5
+curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+  -d '{"values":[true,false,true,true]}' https://my-pi:8443/devices/heatpump/coils/0x14        # FC15
 ```
 
 ---
@@ -459,12 +472,13 @@ Modbus listeners:
 | `modbusServer: { enabled, listenHost, listenPort }`    | `listen: { tcp: { host, port } }`; block present = on |
 | Modbus TCP gateway read-only (FC1-FC4)                 | FC1-FC6, FC15, FC16, limited by `functions`           |
 | every function code on the REST API                    | `functions` of the device; default reading only       |
+| `POST` writes; FC15/FC16 with the address in the body  | `PUT` with the start address in the path; `value` or `values` picks the function code |
 | `$VAR` and `${VAR}` expanded                           | `${VAR}` only                                         |
 | embedded certificate in every environment              | with `env: dev` only                                  |
 
-An old configuration file is refused with a message that names the new key. The REST paths stay
-the same; reads gain `cached`, and the device status gains `bus`, `functions`, `queueLen` and the
-cache counters. Release 1.0.10 and earlier (`mbgw`, `/readholdingregisters`) have a different API.
+An old configuration file is refused with a message that names the new key. The read paths stay
+the same; reads gain `values` and `cached`, and the device status gains `bus`, `functions`,
+`queueLen` and the cache counters. Release 1.0.10 and earlier (`mbgw`, `/readholdingregisters`) have a different API.
 
 ---
 

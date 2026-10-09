@@ -31,10 +31,11 @@ The config file path can also be set via the environment variable `CONFIG_FILE`;
 | GET    | `/health`                                         | API Key | Runtime health metrics           |
 | GET    | `/devices`, `/devices/{device}/status`            | API Key | Device, bus, queue and cache     |
 | GET    | `/devices/{device}/{table}/{address}?quantity=N`  | API Key | Read (FC1-FC4)                   |
-| POST   | `/devices/{device}/{table}/{address}`             | API Key | Write one value (FC5, FC6)       |
-| POST   | `/devices/{device}/{table}`                       | API Key | Write several values (FC15, FC16)|
+| PUT    | `/devices/{device}/{table}/{address}`             | API Key | Write (FC5, FC6, FC15, FC16)     |
 
-`{table}` is `coils`, `discrete-inputs`, `holding-registers` or `input-registers`. Authentication via
+`{table}` is `coils`, `discrete-inputs`, `holding-registers` or `input-registers`; writes go to
+`coils` or `holding-registers`. A write body `{"value": x}` uses FC5/FC6, `{"values": [x, ...]}`
+FC15/FC16. Authentication via
 the `X-API-Key` header. A device allows the function codes in its `functions` only.
 
 Modbus listeners: `listen.tcp` offers the devices on serial buses to Modbus TCP clients (default port

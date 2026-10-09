@@ -4,33 +4,25 @@ definitions:
       error:
         type: string
     type: object
-  app.ModbusWriteMultipleCoilsRequest:
+  app.ModbusWriteCoilsRequest:
     properties:
-      address:
-        type: integer
+      value:
+        example: true
+        type: boolean
       values:
         items:
           type: boolean
         type: array
     type: object
-  app.ModbusWriteMultipleRegistersRequest:
+  app.ModbusWriteRegistersRequest:
     properties:
-      address:
+      value:
+        example: 7
         type: integer
       values:
         items:
           type: integer
         type: array
-    type: object
-  app.ModbusWriteSingleCoilRequest:
-    properties:
-      value:
-        type: boolean
-    type: object
-  app.ModbusWriteSingleRegisterRequest:
-    properties:
-      value:
-        type: integer
     type: object
   health.Model:
     properties:
@@ -111,6 +103,7 @@ definitions:
         description: answered from the cache, without a bus transaction
         type: boolean
       dataHex:
+        description: packed, eight values per byte, first value in the lowest bit
         type: string
       device:
         type: string
@@ -124,6 +117,11 @@ definitions:
         type: string
       unitId:
         type: integer
+      values:
+        description: one value per address
+        items:
+          type: boolean
+        type: array
     type: object
   modbusclient.ReadRegistersResponse:
     properties:
@@ -135,6 +133,7 @@ definitions:
         description: answered from the cache, without a bus transaction
         type: boolean
       dataHex:
+        description: two bytes per register, big endian
         type: string
       device:
         type: string
@@ -148,6 +147,11 @@ definitions:
         type: string
       unitId:
         type: integer
+      values:
+        description: one unsigned value per register
+        items:
+          type: integer
+        type: array
     type: object
   modbusclient.WriteResponse:
     properties:
@@ -197,63 +201,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: List configured device status
-      tags:
-      - modbus
-  /devices/{device}/coils:
-    post:
-      consumes:
-      - application/json
-      description: Writes multiple coils on a configured Modbus device.
-      parameters:
-      - description: Configured device name
-        in: path
-        name: device
-        required: true
-        type: string
-      - description: Multiple coils write request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/app.ModbusWriteMultipleCoilsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Coils successfully written
-          schema:
-            $ref: '#/definitions/modbusclient.WriteResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            type: string
-        "403":
-          description: Function code not allowed for the device
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "404":
-          description: Device not found
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "502":
-          description: Modbus write failed
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "503":
-          description: Bus queue full
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "504":
-          description: Request waited too long in the bus queue
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: 'FC 15: Write multiple coils'
       tags:
       - modbus
   /devices/{device}/coils/{address}:
@@ -315,32 +262,34 @@ paths:
       summary: 'FC 1: Read coils'
       tags:
       - modbus
-    post:
+    put:
       consumes:
       - application/json
-      description: Writes a single coil on a configured Modbus device.
+      description: 'Writes coils starting at the address. {"value": true} writes one
+        coil with FC 5, {"values": [true, false]} writes one or more coils with FC
+        15 — also for a single value, for devices that only accept FC 15.'
       parameters:
       - description: Configured device name
         in: path
         name: device
         required: true
         type: string
-      - description: Target address (decimal or 0x-prefixed hex)
+      - description: Start address (decimal or 0x-prefixed hex)
         in: path
         name: address
         required: true
         type: string
-      - description: Single coil write request
+      - description: Either value (FC 5) or values (FC 15)
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/app.ModbusWriteSingleCoilRequest'
+          $ref: '#/definitions/app.ModbusWriteCoilsRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Coil successfully written
+          description: Coils successfully written
           schema:
             $ref: '#/definitions/modbusclient.WriteResponse'
         "400":
@@ -373,7 +322,7 @@ paths:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: 'FC 5: Write single coil'
+      summary: 'FC 5 / FC 15: Write coils'
       tags:
       - modbus
   /devices/{device}/discrete-inputs/{address}:
@@ -435,63 +384,6 @@ paths:
       summary: 'FC 2: Read discrete inputs'
       tags:
       - modbus
-  /devices/{device}/holding-registers:
-    post:
-      consumes:
-      - application/json
-      description: Writes multiple holding registers on a configured Modbus device.
-      parameters:
-      - description: Configured device name
-        in: path
-        name: device
-        required: true
-        type: string
-      - description: Multiple registers write request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/app.ModbusWriteMultipleRegistersRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Registers successfully written
-          schema:
-            $ref: '#/definitions/modbusclient.WriteResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            type: string
-        "403":
-          description: Function code not allowed for the device
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "404":
-          description: Device not found
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "502":
-          description: Modbus write failed
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "503":
-          description: Bus queue full
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-        "504":
-          description: Request waited too long in the bus queue
-          schema:
-            $ref: '#/definitions/app.ModbusErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: 'FC 16: Write multiple holding registers'
-      tags:
-      - modbus
   /devices/{device}/holding-registers/{address}:
     get:
       description: Reads one or more holding registers from a configured Modbus device.
@@ -551,32 +443,34 @@ paths:
       summary: 'FC 3: Read holding registers'
       tags:
       - modbus
-    post:
+    put:
       consumes:
       - application/json
-      description: Writes a single holding register on a configured Modbus device.
+      description: 'Writes holding registers starting at the address. {"value": 7}
+        writes one register with FC 6, {"values": [7, 8]} writes one or more registers
+        with FC 16 — also for a single value, for devices that only accept FC 16.'
       parameters:
       - description: Configured device name
         in: path
         name: device
         required: true
         type: string
-      - description: Target address (decimal or 0x-prefixed hex)
+      - description: Start address (decimal or 0x-prefixed hex)
         in: path
         name: address
         required: true
         type: string
-      - description: Single register write request
+      - description: Either value (FC 6) or values (FC 16)
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/app.ModbusWriteSingleRegisterRequest'
+          $ref: '#/definitions/app.ModbusWriteRegistersRequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Register successfully written
+          description: Registers successfully written
           schema:
             $ref: '#/definitions/modbusclient.WriteResponse'
         "400":
@@ -609,7 +503,7 @@ paths:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: 'FC 6: Write single holding register'
+      summary: 'FC 6 / FC 16: Write holding registers'
       tags:
       - modbus
   /devices/{device}/input-registers/{address}:

@@ -4,7 +4,7 @@
 // - Public routes without authentication (e.g., version)
 // - Protected routes requiring API key or JWT
 // - Swagger documentation (only in development) at /swagger/
-// - Health, Live, Ready, Monitoring, and S0 data endpoints
+// - Health, device status, and the Modbus read (GET) and write (PUT) endpoints
 //
 // Middleware applied:
 // - CORS
@@ -51,16 +51,15 @@ func (app *App) SetupRoutes() {
 	mux.Handle("GET /devices/{device}/holding-registers/{address}", web.WithAuth(app.HandleModbusReadHoldingRegisters(), webCfg)) // Function code 3: Read Holding Registers
 	mux.Handle("GET /devices/{device}/input-registers/{address}", web.WithAuth(app.HandleModbusReadInputRegisters(), webCfg))     // Function code 4: Read Input Registers
 
-	// Modbus write routes
-	mux.Handle("POST /devices/{device}/coils/{address}", web.WithAuth(app.HandleModbusWriteSingleCoil(), webCfg))                 // Function code 5: Write Single Coil
-	mux.Handle("POST /devices/{device}/holding-registers/{address}", web.WithAuth(app.HandleModbusWriteSingleRegister(), webCfg)) // Function code 6: Write Single Register
-	mux.Handle("POST /devices/{device}/coils", web.WithAuth(app.HandleModbusWriteMultipleCoils(), webCfg))                        // Function code 15: Write Multiple Coils
-	mux.Handle("POST /devices/{device}/holding-registers", web.WithAuth(app.HandleModbusWriteMultipleRegisters(), webCfg))        // Function code 16: Write Multiple Registers
+	// Modbus write routes: the address is the start address; the body selects the function code,
+	// "value" for a single write (FC5/FC6), "values" for a multiple write (FC15/FC16).
+	mux.Handle("PUT /devices/{device}/coils/{address}", web.WithAuth(app.HandleModbusWriteCoils(), webCfg))                        // Function code 5 or 15: Write Coils
+	mux.Handle("PUT /devices/{device}/holding-registers/{address}", web.WithAuth(app.HandleModbusWriteHoldingRegisters(), webCfg)) // Function code 6 or 16: Write Holding Registers
 
 	// Apply global middleware: CORS + IP filter
-	// CORS advertises only the methods the API serves: GET for reads, POST for writes and the
+	// CORS advertises only the methods the API serves: GET for reads, PUT for writes and the
 	// preflight OPTIONS.
-	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodPost, http.MethodOptions))
+	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodPut, http.MethodOptions))
 	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
 	handler = WithLogging(handler)
 	app.web.Handler = handler

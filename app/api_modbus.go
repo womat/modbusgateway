@@ -17,30 +17,26 @@ import (
 var (
 	ErrMissingRequestBody   = errors.New("missing request body")
 	ErrRequestBodyNotSingle = errors.New("request body must contain a single JSON object")
+	ErrValueXorValues       = errors.New(`request body needs either "value" (single write) or "values" (multiple write)`)
 )
 
 type ModbusErrorResponse struct {
 	Error string `json:"error"`
 }
 
-type ModbusUint16 uint16
-
-type ModbusWriteSingleCoilRequest struct {
-	Value *bool `json:"value"`
+// ModbusWriteCoilsRequest is the body of a coil write: "value" writes one coil with FC5,
+// "values" writes one or more coils with FC15. Exactly one of them must be set.
+type ModbusWriteCoilsRequest struct {
+	Value  *bool  `json:"value,omitempty" example:"true"`
+	Values []bool `json:"values,omitempty"`
 }
 
-type ModbusWriteSingleRegisterRequest struct {
-	Value *uint16 `json:"value"`
-}
-
-type ModbusWriteMultipleCoilsRequest struct {
-	Address *ModbusUint16 `json:"address"`
-	Values  []bool        `json:"values"`
-}
-
-type ModbusWriteMultipleRegistersRequest struct {
-	Address *ModbusUint16 `json:"address"`
-	Values  []uint16      `json:"values"`
+// ModbusWriteRegistersRequest is the body of a holding register write: "value" writes one
+// register with FC6, "values" writes one or more registers with FC16. Exactly one of them must
+// be set.
+type ModbusWriteRegistersRequest struct {
+	Value  *uint16  `json:"value,omitempty" example:"7"`
+	Values []uint16 `json:"values,omitempty"`
 }
 
 // HandleModbusListDeviceStatus returns the current manager status for all configured devices.
@@ -207,227 +203,69 @@ func (app *App) HandleModbusReadInputRegisters() http.Handler {
 	})
 }
 
-// HandleModbusWriteSingleCoil writes a single coil on a configured device.
+// HandleModbusWriteCoils writes coils on a configured device.
 //
-//	@Summary		FC 5: Write single coil
-//	@Description	Writes a single coil on a configured Modbus device.
+//	@Summary		FC 5 / FC 15: Write coils
+//	@Description	Writes coils starting at the address. {"value": true} writes one coil with FC 5, {"values": [true, false]} writes one or more coils with FC 15 — also for a single value, for devices that only accept FC 15.
 //	@Tags			modbus
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			device	path		string							true	"Configured device name"
-//	@Param			address	path		string							true	"Target address (decimal or 0x-prefixed hex)"
-//	@Param			request	body		ModbusWriteSingleCoilRequest	true	"Single coil write request"
-//	@Success		200		{object}	modbusclient.WriteResponse		"Coil successfully written"
-//	@Failure		400		{object}	ModbusErrorResponse				"Invalid request"
-//	@Failure		502		{object}	ModbusErrorResponse				"Modbus write failed"
-//	@Failure		403		{object}	ModbusErrorResponse				"Function code not allowed for the device"
-//	@Failure		404		{object}	ModbusErrorResponse				"Device not found"
-//	@Failure		503		{object}	ModbusErrorResponse				"Bus queue full"
-//	@Failure		504		{object}	ModbusErrorResponse				"Request waited too long in the bus queue"
-//	@Failure		401		{string}	string							"Unauthorized"
-//	@Router			/devices/{device}/coils/{address} [post]
-func (app *App) HandleModbusWriteSingleCoil() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
+//	@Param			device	path		string						true	"Configured device name"
+//	@Param			address	path		string						true	"Start address (decimal or 0x-prefixed hex)"
+//	@Param			request	body		ModbusWriteCoilsRequest		true	"Either value (FC 5) or values (FC 15)"
+//	@Success		200		{object}	modbusclient.WriteResponse	"Coils successfully written"
+//	@Failure		400		{object}	ModbusErrorResponse			"Invalid request"
+//	@Failure		502		{object}	ModbusErrorResponse			"Modbus write failed"
+//	@Failure		403		{object}	ModbusErrorResponse			"Function code not allowed for the device"
+//	@Failure		404		{object}	ModbusErrorResponse			"Device not found"
+//	@Failure		503		{object}	ModbusErrorResponse			"Bus queue full"
+//	@Failure		504		{object}	ModbusErrorResponse			"Request waited too long in the bus queue"
+//	@Failure		401		{string}	string						"Unauthorized"
+//	@Router			/devices/{device}/coils/{address} [put]
+func (app *App) HandleModbusWriteCoils() http.Handler {
+	return app.handleWrite(func(device string, register uint16, r *http.Request) (modbusclient.WriteResponse, error) {
+		var body ModbusWriteCoilsRequest
+		if err := decodeWriteBody(r, &body, func() (bool, bool) { return body.Value != nil, body.Values != nil }); err != nil {
+			return modbusclient.WriteResponse{}, err
 		}
-
-		device, register, ok := parseDeviceRegisterPath(w, r)
-		if !ok {
-			return
+		if body.Value != nil {
+			return app.modbusClient.WriteSingleCoil(modbusclient.WriteSingleCoilRequest{Device: device, Register: register, Value: *body.Value})
 		}
-
-		var body ModbusWriteSingleCoilRequest
-		if err := decodeJSONBody(r, &body); err != nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-		if body.Value == nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing value field"})
-			return
-		}
-
-		resp, err := app.modbusClient.WriteSingleCoil(modbusclient.WriteSingleCoilRequest{
-			Device:   device,
-			Register: register,
-			Value:    *body.Value,
-		})
-		if err != nil {
-			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-
-		web.Encode(w, http.StatusOK, resp)
+		return app.modbusClient.WriteMultipleCoils(modbusclient.WriteMultipleCoilsRequest{Device: device, Register: register, Values: body.Values})
 	})
 }
 
-// HandleModbusWriteSingleRegister writes a single holding register on a configured device.
+// HandleModbusWriteHoldingRegisters writes holding registers on a configured device.
 //
-//	@Summary		FC 6: Write single holding register
-//	@Description	Writes a single holding register on a configured Modbus device.
+//	@Summary		FC 6 / FC 16: Write holding registers
+//	@Description	Writes holding registers starting at the address. {"value": 7} writes one register with FC 6, {"values": [7, 8]} writes one or more registers with FC 16 — also for a single value, for devices that only accept FC 16.
 //	@Tags			modbus
 //	@Accept			json
 //	@Produce		json
 //	@Security		ApiKeyAuth
-//	@Param			device	path		string								true	"Configured device name"
-//	@Param			address	path		string								true	"Target address (decimal or 0x-prefixed hex)"
-//	@Param			request	body		ModbusWriteSingleRegisterRequest	true	"Single register write request"
-//	@Success		200		{object}	modbusclient.WriteResponse			"Register successfully written"
-//	@Failure		400		{object}	ModbusErrorResponse					"Invalid request"
-//	@Failure		502		{object}	ModbusErrorResponse					"Modbus write failed"
-//	@Failure		403		{object}	ModbusErrorResponse					"Function code not allowed for the device"
-//	@Failure		404		{object}	ModbusErrorResponse					"Device not found"
-//	@Failure		503		{object}	ModbusErrorResponse					"Bus queue full"
-//	@Failure		504		{object}	ModbusErrorResponse					"Request waited too long in the bus queue"
-//	@Failure		401		{string}	string								"Unauthorized"
-//	@Router			/devices/{device}/holding-registers/{address} [post]
-func (app *App) HandleModbusWriteSingleRegister() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
+//	@Param			device	path		string						true	"Configured device name"
+//	@Param			address	path		string						true	"Start address (decimal or 0x-prefixed hex)"
+//	@Param			request	body		ModbusWriteRegistersRequest	true	"Either value (FC 6) or values (FC 16)"
+//	@Success		200		{object}	modbusclient.WriteResponse	"Registers successfully written"
+//	@Failure		400		{object}	ModbusErrorResponse			"Invalid request"
+//	@Failure		502		{object}	ModbusErrorResponse			"Modbus write failed"
+//	@Failure		403		{object}	ModbusErrorResponse			"Function code not allowed for the device"
+//	@Failure		404		{object}	ModbusErrorResponse			"Device not found"
+//	@Failure		503		{object}	ModbusErrorResponse			"Bus queue full"
+//	@Failure		504		{object}	ModbusErrorResponse			"Request waited too long in the bus queue"
+//	@Failure		401		{string}	string						"Unauthorized"
+//	@Router			/devices/{device}/holding-registers/{address} [put]
+func (app *App) HandleModbusWriteHoldingRegisters() http.Handler {
+	return app.handleWrite(func(device string, register uint16, r *http.Request) (modbusclient.WriteResponse, error) {
+		var body ModbusWriteRegistersRequest
+		if err := decodeWriteBody(r, &body, func() (bool, bool) { return body.Value != nil, body.Values != nil }); err != nil {
+			return modbusclient.WriteResponse{}, err
 		}
-
-		device, register, ok := parseDeviceRegisterPath(w, r)
-		if !ok {
-			return
+		if body.Value != nil {
+			return app.modbusClient.WriteSingleRegister(modbusclient.WriteSingleRegisterRequest{Device: device, Register: register, Value: *body.Value})
 		}
-
-		var body ModbusWriteSingleRegisterRequest
-		if err := decodeJSONBody(r, &body); err != nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-		if body.Value == nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing value field"})
-			return
-		}
-
-		resp, err := app.modbusClient.WriteSingleRegister(modbusclient.WriteSingleRegisterRequest{
-			Device:   device,
-			Register: register,
-			Value:    *body.Value,
-		})
-		if err != nil {
-			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-
-		web.Encode(w, http.StatusOK, resp)
-	})
-}
-
-// HandleModbusWriteMultipleCoils writes multiple coils on a configured device.
-//
-//	@Summary		FC 15: Write multiple coils
-//	@Description	Writes multiple coils on a configured Modbus device.
-//	@Tags			modbus
-//	@Accept			json
-//	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			device	path		string							true	"Configured device name"
-//	@Param			request	body		ModbusWriteMultipleCoilsRequest	true	"Multiple coils write request"
-//	@Success		200		{object}	modbusclient.WriteResponse		"Coils successfully written"
-//	@Failure		400		{object}	ModbusErrorResponse				"Invalid request"
-//	@Failure		502		{object}	ModbusErrorResponse				"Modbus write failed"
-//	@Failure		403		{object}	ModbusErrorResponse				"Function code not allowed for the device"
-//	@Failure		404		{object}	ModbusErrorResponse				"Device not found"
-//	@Failure		503		{object}	ModbusErrorResponse				"Bus queue full"
-//	@Failure		504		{object}	ModbusErrorResponse				"Request waited too long in the bus queue"
-//	@Failure		401		{string}	string							"Unauthorized"
-//	@Router			/devices/{device}/coils [post]
-func (app *App) HandleModbusWriteMultipleCoils() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
-		device := r.PathValue("device")
-		if device == "" {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing device path parameter"})
-			return
-		}
-
-		var body ModbusWriteMultipleCoilsRequest
-		if err := decodeJSONBody(r, &body); err != nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-		if body.Address == nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing address field"})
-			return
-		}
-
-		resp, err := app.modbusClient.WriteMultipleCoils(modbusclient.WriteMultipleCoilsRequest{
-			Device:   device,
-			Register: uint16(*body.Address),
-			Values:   body.Values,
-		})
-		if err != nil {
-			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-
-		web.Encode(w, http.StatusOK, resp)
-	})
-}
-
-// HandleModbusWriteMultipleRegisters writes multiple holding registers on a configured device.
-//
-//	@Summary		FC 16: Write multiple holding registers
-//	@Description	Writes multiple holding registers on a configured Modbus device.
-//	@Tags			modbus
-//	@Accept			json
-//	@Produce		json
-//	@Security		ApiKeyAuth
-//	@Param			device	path		string								true	"Configured device name"
-//	@Param			request	body		ModbusWriteMultipleRegistersRequest	true	"Multiple registers write request"
-//	@Success		200		{object}	modbusclient.WriteResponse			"Registers successfully written"
-//	@Failure		400		{object}	ModbusErrorResponse					"Invalid request"
-//	@Failure		502		{object}	ModbusErrorResponse					"Modbus write failed"
-//	@Failure		403		{object}	ModbusErrorResponse					"Function code not allowed for the device"
-//	@Failure		404		{object}	ModbusErrorResponse					"Device not found"
-//	@Failure		503		{object}	ModbusErrorResponse					"Bus queue full"
-//	@Failure		504		{object}	ModbusErrorResponse					"Request waited too long in the bus queue"
-//	@Failure		401		{string}	string								"Unauthorized"
-//	@Router			/devices/{device}/holding-registers [post]
-func (app *App) HandleModbusWriteMultipleRegisters() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
-		device := r.PathValue("device")
-		if device == "" {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing device path parameter"})
-			return
-		}
-
-		var body ModbusWriteMultipleRegistersRequest
-		if err := decodeJSONBody(r, &body); err != nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-		if body.Address == nil {
-			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing address field"})
-			return
-		}
-
-		resp, err := app.modbusClient.WriteMultipleRegisters(modbusclient.WriteMultipleRegistersRequest{
-			Device:   device,
-			Register: uint16(*body.Address),
-			Values:   body.Values,
-		})
-		if err != nil {
-			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-
-		web.Encode(w, http.StatusOK, resp)
+		return app.modbusClient.WriteMultipleRegisters(modbusclient.WriteMultipleRegistersRequest{Device: device, Register: register, Values: body.Values})
 	})
 }
 
@@ -465,27 +303,6 @@ func parseModbusUint16(value string) (uint16, error) {
 	}
 
 	return uint16(parsed), nil
-}
-
-func (v *ModbusUint16) UnmarshalJSON(data []byte) error {
-	var number uint16
-	if err := json.Unmarshal(data, &number); err == nil {
-		*v = ModbusUint16(number)
-		return nil
-	}
-
-	var text string
-	if err := json.Unmarshal(data, &text); err != nil {
-		return fmt.Errorf("address must be a number or string: %w", err)
-	}
-
-	parsed, err := parseModbusUint16(text)
-	if err != nil {
-		return fmt.Errorf("invalid address: %w", err)
-	}
-
-	*v = ModbusUint16(parsed)
-	return nil
 }
 
 func (app *App) handleReadBits(read func(modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error)) http.Handler {
@@ -547,6 +364,48 @@ func (app *App) handleReadRegisters(read func(modbusclient.ReadRegistersRequest)
 		})
 		if err != nil {
 			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
+			return
+		}
+
+		web.Encode(w, http.StatusOK, resp)
+	})
+}
+
+// requestError is a problem with the request itself; the handler answers 400.
+type requestError struct{ error }
+
+// decodeWriteBody decodes a write body into dst; set reports afterwards whether value and values
+// are present, and exactly one of them must be.
+func decodeWriteBody(r *http.Request, dst any, set func() (value, values bool)) error {
+	if err := decodeJSONBody(r, dst); err != nil {
+		return requestError{err}
+	}
+	if value, values := set(); value == values {
+		return requestError{ErrValueXorValues}
+	}
+	return nil
+}
+
+// handleWrite parses device and address from the path and answers with the result of write.
+func (app *App) handleWrite(write func(device string, register uint16, r *http.Request) (modbusclient.WriteResponse, error)) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if app.modbusClient == nil {
+			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
+			return
+		}
+
+		device, register, ok := parseDeviceRegisterPath(w, r)
+		if !ok {
+			return
+		}
+
+		resp, err := write(device, register, r)
+		if err != nil {
+			status := statusForModbusError(err)
+			if errors.As(err, new(requestError)) {
+				status = http.StatusBadRequest
+			}
+			web.Encode(w, status, ModbusErrorResponse{Error: err.Error()})
 			return
 		}
 

@@ -55,94 +55,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/devices/{device}/coils": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Writes multiple coils on a configured Modbus device.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "modbus"
-                ],
-                "summary": "FC 15: Write multiple coils",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Configured device name",
-                        "name": "device",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Multiple coils write request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusWriteMultipleCoilsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Coils successfully written",
-                        "schema": {
-                            "$ref": "#/definitions/modbusclient.WriteResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "403": {
-                        "description": "Function code not allowed for the device",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Device not found",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "502": {
-                        "description": "Modbus write failed",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "503": {
-                        "description": "Bus queue full",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "504": {
-                        "description": "Request waited too long in the bus queue",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/devices/{device}/coils/{address}": {
             "get": {
                 "security": [
@@ -232,13 +144,13 @@ const docTemplate = `{
                     }
                 }
             },
-            "post": {
+            "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Writes a single coil on a configured Modbus device.",
+                "description": "Writes coils starting at the address. {\"value\": true} writes one coil with FC 5, {\"values\": [true, false]} writes one or more coils with FC 15 — also for a single value, for devices that only accept FC 15.",
                 "consumes": [
                     "application/json"
                 ],
@@ -248,7 +160,7 @@ const docTemplate = `{
                 "tags": [
                     "modbus"
                 ],
-                "summary": "FC 5: Write single coil",
+                "summary": "FC 5 / FC 15: Write coils",
                 "parameters": [
                     {
                         "type": "string",
@@ -259,24 +171,24 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Target address (decimal or 0x-prefixed hex)",
+                        "description": "Start address (decimal or 0x-prefixed hex)",
                         "name": "address",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Single coil write request",
+                        "description": "Either value (FC 5) or values (FC 15)",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/app.ModbusWriteSingleCoilRequest"
+                            "$ref": "#/definitions/app.ModbusWriteCoilsRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Coil successfully written",
+                        "description": "Coils successfully written",
                         "schema": {
                             "$ref": "#/definitions/modbusclient.WriteResponse"
                         }
@@ -416,94 +328,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/devices/{device}/holding-registers": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Writes multiple holding registers on a configured Modbus device.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "modbus"
-                ],
-                "summary": "FC 16: Write multiple holding registers",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Configured device name",
-                        "name": "device",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Multiple registers write request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusWriteMultipleRegistersRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Registers successfully written",
-                        "schema": {
-                            "$ref": "#/definitions/modbusclient.WriteResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "403": {
-                        "description": "Function code not allowed for the device",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Device not found",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "502": {
-                        "description": "Modbus write failed",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "503": {
-                        "description": "Bus queue full",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "504": {
-                        "description": "Request waited too long in the bus queue",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/devices/{device}/holding-registers/{address}": {
             "get": {
                 "security": [
@@ -593,13 +417,13 @@ const docTemplate = `{
                     }
                 }
             },
-            "post": {
+            "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Writes a single holding register on a configured Modbus device.",
+                "description": "Writes holding registers starting at the address. {\"value\": 7} writes one register with FC 6, {\"values\": [7, 8]} writes one or more registers with FC 16 — also for a single value, for devices that only accept FC 16.",
                 "consumes": [
                     "application/json"
                 ],
@@ -609,7 +433,7 @@ const docTemplate = `{
                 "tags": [
                     "modbus"
                 ],
-                "summary": "FC 6: Write single holding register",
+                "summary": "FC 6 / FC 16: Write holding registers",
                 "parameters": [
                     {
                         "type": "string",
@@ -620,24 +444,24 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Target address (decimal or 0x-prefixed hex)",
+                        "description": "Start address (decimal or 0x-prefixed hex)",
                         "name": "address",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Single register write request",
+                        "description": "Either value (FC 6) or values (FC 16)",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/app.ModbusWriteSingleRegisterRequest"
+                            "$ref": "#/definitions/app.ModbusWriteRegistersRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Register successfully written",
+                        "description": "Registers successfully written",
                         "schema": {
                             "$ref": "#/definitions/modbusclient.WriteResponse"
                         }
@@ -898,11 +722,12 @@ const docTemplate = `{
                 }
             }
         },
-        "app.ModbusWriteMultipleCoilsRequest": {
+        "app.ModbusWriteCoilsRequest": {
             "type": "object",
             "properties": {
-                "address": {
-                    "type": "integer"
+                "value": {
+                    "type": "boolean",
+                    "example": true
                 },
                 "values": {
                     "type": "array",
@@ -912,33 +737,18 @@ const docTemplate = `{
                 }
             }
         },
-        "app.ModbusWriteMultipleRegistersRequest": {
+        "app.ModbusWriteRegistersRequest": {
             "type": "object",
             "properties": {
-                "address": {
-                    "type": "integer"
+                "value": {
+                    "type": "integer",
+                    "example": 7
                 },
                 "values": {
                     "type": "array",
                     "items": {
                         "type": "integer"
                     }
-                }
-            }
-        },
-        "app.ModbusWriteSingleCoilRequest": {
-            "type": "object",
-            "properties": {
-                "value": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "app.ModbusWriteSingleRegisterRequest": {
-            "type": "object",
-            "properties": {
-                "value": {
-                    "type": "integer"
                 }
             }
         },
@@ -1054,6 +864,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "dataHex": {
+                    "description": "packed, eight values per byte, first value in the lowest bit",
                     "type": "string"
                 },
                 "device": {
@@ -1073,6 +884,13 @@ const docTemplate = `{
                 },
                 "unitId": {
                     "type": "integer"
+                },
+                "values": {
+                    "description": "one value per address",
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
                 }
             }
         },
@@ -1090,6 +908,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "dataHex": {
+                    "description": "two bytes per register, big endian",
                     "type": "string"
                 },
                 "device": {
@@ -1109,6 +928,13 @@ const docTemplate = `{
                 },
                 "unitId": {
                     "type": "integer"
+                },
+                "values": {
+                    "description": "one unsigned value per register",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },

@@ -62,22 +62,24 @@ type ReadBitsResponse struct {
 	Register     uint16  `json:"address"`
 	AddressHex   string  `json:"addressHex"`
 	Length       uint16  `json:"quantity"`
-	DataHex      string  `json:"dataHex"`
-	Cached       bool    `json:"cached"` // answered from the cache, without a bus transaction
+	DataHex      string  `json:"dataHex"` // packed, eight values per byte, first value in the lowest bit
+	Values       []bool  `json:"values"`  // one value per address
+	Cached       bool    `json:"cached"`  // answered from the cache, without a bus transaction
 }
 
 // ReadRegistersResponse contains the normalized API response for a FC3 or FC4 read.
 type ReadRegistersResponse struct {
-	Device       string  `json:"device"`
-	Duration     float64 `json:"duration"`
-	Transport    string  `json:"transport"`
-	UnitId       uint8   `json:"unitId"`
-	FunctionCode uint8   `json:"functionCode"`
-	Register     uint16  `json:"address"`
-	AddressHex   string  `json:"addressHex"`
-	Length       uint16  `json:"quantity"`
-	DataHex      string  `json:"dataHex"`
-	Cached       bool    `json:"cached"` // answered from the cache, without a bus transaction
+	Device       string   `json:"device"`
+	Duration     float64  `json:"duration"`
+	Transport    string   `json:"transport"`
+	UnitId       uint8    `json:"unitId"`
+	FunctionCode uint8    `json:"functionCode"`
+	Register     uint16   `json:"address"`
+	AddressHex   string   `json:"addressHex"`
+	Length       uint16   `json:"quantity"`
+	DataHex      string   `json:"dataHex"` // two bytes per register, big endian
+	Values       []uint16 `json:"values"`  // one unsigned value per register
+	Cached       bool     `json:"cached"`  // answered from the cache, without a bus transaction
 }
 
 // WriteResponse contains the normalized API response for write operations.
@@ -132,7 +134,7 @@ func (s *Service) ReadCoils(req ReadBitsRequest) (ReadBitsResponse, error) {
 		return ReadBitsResponse{}, err
 	}
 
-	return mapReadBitsResponse(result.Device, result.Duration, 1, result.Register, result.Length, result.Data, result.Cached), nil
+	return mapReadBitsResponse(result.Device, result.Duration, 1, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
 // ReadDiscreteInputs validates the request shape and executes a Modbus FC2 read via the manager.
@@ -146,7 +148,7 @@ func (s *Service) ReadDiscreteInputs(req ReadBitsRequest) (ReadBitsResponse, err
 		return ReadBitsResponse{}, err
 	}
 
-	return mapReadBitsResponse(result.Device, result.Duration, 2, result.Register, result.Length, result.Data, result.Cached), nil
+	return mapReadBitsResponse(result.Device, result.Duration, 2, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
 // ReadHoldingRegisters validates the request shape and executes a Modbus FC3 read via the manager.
@@ -160,7 +162,7 @@ func (s *Service) ReadHoldingRegisters(req ReadRegistersRequest) (ReadRegistersR
 		return ReadRegistersResponse{}, err
 	}
 
-	return mapReadRegistersResponse(result.Device, result.Duration, 3, result.Register, result.Length, result.Data, result.Cached), nil
+	return mapReadRegistersResponse(result.Device, result.Duration, 3, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
 // ReadInputRegisters validates the request shape and executes a Modbus FC4 read via the manager.
@@ -174,7 +176,7 @@ func (s *Service) ReadInputRegisters(req ReadRegistersRequest) (ReadRegistersRes
 		return ReadRegistersResponse{}, err
 	}
 
-	return mapReadRegistersResponse(result.Device, result.Duration, 4, result.Register, result.Length, result.Data, result.Cached), nil
+	return mapReadRegistersResponse(result.Device, result.Duration, 4, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
 // WriteSingleCoil validates the request shape and executes a Modbus FC5 write via the manager.
@@ -337,7 +339,7 @@ func validateWriteMultipleRegistersRequest(req WriteMultipleRegistersRequest) er
 	return nil
 }
 
-func mapReadBitsResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte, cached bool) ReadBitsResponse {
+func mapReadBitsResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte, values []bool, cached bool) ReadBitsResponse {
 	return ReadBitsResponse{
 		Device:       device.Name,
 		Duration:     duration.Seconds(),
@@ -348,11 +350,12 @@ func mapReadBitsResponse(device modbusmanager.DeviceStatus, duration time.Durati
 		AddressHex:   fmt.Sprintf("0x%X", register),
 		Length:       length,
 		DataHex:      strings.ToUpper(hex.EncodeToString(data)),
+		Values:       values,
 		Cached:       cached,
 	}
 }
 
-func mapReadRegistersResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte, cached bool) ReadRegistersResponse {
+func mapReadRegistersResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte, values []uint16, cached bool) ReadRegistersResponse {
 	return ReadRegistersResponse{
 		Device:       device.Name,
 		Duration:     duration.Seconds(),
@@ -363,6 +366,7 @@ func mapReadRegistersResponse(device modbusmanager.DeviceStatus, duration time.D
 		AddressHex:   fmt.Sprintf("0x%X", register),
 		Length:       length,
 		DataHex:      strings.ToUpper(hex.EncodeToString(data)),
+		Values:       values,
 		Cached:       cached,
 	}
 }
