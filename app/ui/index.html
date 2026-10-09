@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>modbusgateway</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563a8'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 10h5M4 16h5M4 22h5'/%3E%3Crect x='11' y='6' width='10' height='20' rx='2.5'/%3E%3Cpath d='M23 16h5'/%3E%3C/g%3E%3Ccircle cx='16' cy='11' r='1.9' fill='%234ade80'/%3E%3C/svg%3E">
+<!--
+  Web page of modbusgateway, embedded in the binary and served at GET /.
+  It holds no data itself: it asks for the API key once, keeps it in localStorage and polls
+  /health, /devices and /activity with it. It shows who talks to the gateway, never register
+  values. Self-contained on purpose - no external fonts or scripts, the Pi may have no internet.
+-->
+<style>
+/* Layout: header, communication (listeners with their clients -> gateway -> buses as lines with a
+   tap per device), then the live protocol. Tokens and components follow smartmeter/s0meter. */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --line: #dde2e8;
+  --fg: #17202b;
+  --muted: #5d6b7a;
+  --accent: #2563a8;
+  --accent-soft: #e4edf8;
+  --ok: #1f7a4d;
+  --ok-soft: #e3f3ea;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --crit: #b3261e;
+  --crit-soft: #fbe6e4;
+  --off-soft: #e8ecf1;
+  --track: #e8ecf1;
+  --lane: #e9edf2;
+  --led: #22c55e;
+  --led-glow: rgba(34, 197, 94, .55);
+  --led-crit-glow: rgba(179, 38, 30, .45);
+  --mark-fg: #f7f9fb;
+  --mark-dark: #1b232d;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-num: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --surface: #19212a; --line: #2a3541; --fg: #e6ebf0; --muted: #93a1b0;
+    --accent: #6ea8e6; --accent-soft: #1b2a3b;
+    --ok: #5cc98f; --ok-soft: #173326; --warn: #e9b04c; --warn-soft: #36290f;
+    --crit: #f07a70; --crit-soft: #3d1c1a; --off-soft: #1d2630; --track: #232d38; --lane: #161d25;
+    --led: #4ade80; --led-glow: rgba(74, 222, 128, .6); --led-crit-glow: rgba(240, 122, 112, .5);
+    --mark-fg: #f7f9fb; --mark-dark: #1b232d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #19212a; --line: #2a3541; --fg: #e6ebf0; --muted: #93a1b0;
+  --accent: #6ea8e6; --accent-soft: #1b2a3b;
+  --ok: #5cc98f; --ok-soft: #173326; --warn: #e9b04c; --warn-soft: #36290f;
+  --crit: #f07a70; --crit-soft: #3d1c1a; --off-soft: #1d2630; --track: #232d38; --lane: #161d25;
+  --led: #4ade80; --led-glow: rgba(74, 222, 128, .6); --led-crit-glow: rgba(240, 122, 112, .5);
+  --mark-fg: #f7f9fb; --mark-dark: #1b232d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui);
+  font-size: 15px; line-height: 1.45; padding: 0 16px;
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-block: 16px 40px; }
+.stack { display: flex; flex-direction: column; gap: 20px; }
+button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; }
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.seg button, .btn {
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.btn:hover { color: var(--fg); border-color: var(--muted); }
+
+/* Header */
+header {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand .mark { width: 40px; height: 30px; color: var(--accent); flex: none; }
+.brand .mark .led { fill: var(--ok-soft); transition: fill .35s; }
+.brand .mark .led.on { fill: var(--led); transition: none; }
+.brand .words { display: flex; flex-direction: column; line-height: 1.1; }
+.brand h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.brand h1 b { color: var(--accent); }
+.brand .sub { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+.brand .device { min-width: 0; padding-left: 14px; margin-left: 2px; border-left: 1px solid var(--line); }
+.brand .host { font-size: 22px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill.crit { color: var(--crit); background: var(--crit-soft); }
+.pill.off { color: var(--muted); background: var(--off-soft); }
+
+.signout {
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.signout:hover { color: var(--fg); border-color: var(--muted); }
+.signout svg { width: 14px; height: 14px; }
+.banner {
+  display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 8px;
+  background: var(--crit-soft); color: var(--crit); font-weight: 500; font-size: 14px;
+}
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.content.stale { opacity: .45; filter: grayscale(.8); }
+.banner b { font-weight: 700; }
+
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.sec-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.hint { font-size: 13px; color: var(--muted); }
+.sec-head { position: relative; }
+.fold { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.fold .chev { display: inline-block; width: 1em; color: var(--muted); transition: transform .15s; }
+.fold[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.fold .off { font-size: 12px; font-weight: 600; color: var(--muted); }
+details.help { font-size: 13px; color: var(--muted); }
+details.help > summary {
+  list-style: none; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; background: var(--surface);
+}
+details.help > summary::-webkit-details-marker { display: none; }
+details.help > summary::before { content: "?"; display: inline-block; margin-right: 6px; font-weight: 700; color: var(--accent); }
+details.help[open] > summary { color: var(--fg); border-color: var(--muted); }
+details.help .pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 5; width: min(440px, calc(100vw - 32px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .14); color: var(--fg);
+}
+details.help h4 { margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+details.help dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 14px; font-size: 13px; line-height: 1.4; }
+details.help dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-top: 2px; }
+details.help dd { margin: 0; }
+details.help dd.legend { display: grid; gap: 5px; }
+details.help dd.legend .res { margin-right: 6px; }
+p.hint { margin: 0; max-width: 80ch; }
+
+/* ---- Communication ----------------------------------------------------------------------
+   [listener groups] [wire] | gateway trunk | [wire] [bus] [bus line with one tap per device]  */
+.flow { display: grid; grid-template-columns: minmax(0, 1.15fr) 22px minmax(0, 1.85fr); align-items: stretch; }
+.col { display: flex; flex-direction: column; gap: 12px; justify-content: center; min-width: 0; }
+.flowwrap { position: relative; padding-block: 38px 14px; }
+.flowwrap > .flow { position: relative; z-index: 1; }
+.lanes { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) 22px minmax(0, 1.85fr); }
+.lanes-r { display: grid; grid-template-columns: 44px minmax(0, .95fr) 76px minmax(0, 1.05fr); }
+.lane { background: var(--lane); border-radius: 12px; margin-inline: -8px; padding: 11px 12px; }
+/* The first lane stops before the wires of the listeners, so the gateway trunk is centered in
+   the gap between the listener lane and the bus lane. */
+.lanes > .lane:first-child { margin-right: 36px; }
+
+/* The gateway: one vertical trunk every listener feeds and every bus queue leaves from. */
+.trunk { position: relative; display: flex; justify-content: center; }
+.trunk::before {
+  content: ""; position: absolute; top: 18px; bottom: 18px; left: 50%; width: 6px; margin-left: -3px;
+  border-radius: 3px; background: var(--accent); opacity: .85;
+}
+.trunk span {
+  position: relative; align-self: center; writing-mode: vertical-rl; transform: rotate(180deg);
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent); background: var(--bg); padding: 8px 0;
+}
+
+/* Listener group: the listener as a header, its clients as rows */
+.grow-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; }
+.group {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0;
+  transition: opacity .2s;
+}
+.group.off { border-style: dashed; }
+.ghead {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ghead .where { font-family: var(--font-num); font-size: 13px; font-weight: 600; }
+.ghead .set { font-size: 12px; color: var(--muted); }
+.ghead .extra { font-size: 12px; color: var(--muted); margin-left: auto; }
+.ghead .extra b { color: var(--fg); font-family: var(--font-num); }
+.kind {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 1px 6px; border-radius: 4px;
+  background: var(--off-soft); color: var(--muted); flex: none; white-space: nowrap;
+}
+.kind.rest { background: var(--accent-soft); color: var(--accent); }
+.kind.tcp { background: var(--ok-soft); color: var(--ok); }
+.kind.rtu { background: var(--warn-soft); color: var(--warn); }
+.clients { display: flex; flex-direction: column; }
+.client {
+  display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
+  padding: 7px 12px; border-top: 1px solid var(--line); cursor: pointer; transition: opacity .2s, background .2s;
+}
+.client:first-child { border-top: 0; }
+.client:hover { background: var(--bg); }
+.client.sel { background: var(--accent-soft); }
+.client.dim { opacity: .35; }
+.client.gone { color: var(--muted); }
+.client .ip { font-family: var(--font-num); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.client .to { grid-column: 2 / 4; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.client .to b { color: var(--fg); font-weight: 500; }
+.client .rate { font-size: 12px; color: var(--muted); white-space: nowrap; text-align: right; }
+.client .rate b { color: var(--fg); font-family: var(--font-num); }
+.client .rate b.warn { color: var(--warn); }
+.client .rate b.crit { color: var(--crit); }
+.client .state { grid-column: 2 / 4; font-size: 11.5px; color: var(--muted); }
+.led {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--ok-soft); box-shadow: 0 0 0 1px var(--ok);
+  transition: background .35s, box-shadow .35s;
+}
+.led.on { background: var(--led); box-shadow: 0 0 0 1px var(--ok), 0 0 8px 2px var(--led-glow); transition: none; }
+.led.off { background: var(--track); box-shadow: 0 0 0 1px var(--line); }
+.more {
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--accent); background: none; border: 0;
+  border-top: 1px solid var(--line); padding: 7px 12px; text-align: left; cursor: pointer; width: 100%;
+}
+.empty-row { padding: 9px 12px; font-size: 12.5px; color: var(--muted); }
+
+/* Link: dashed wire with an activity LED, as in smartmeter */
+.link { position: relative; height: 36px; display: flex; align-items: center; justify-content: center; }
+.link .wire {
+  position: absolute; left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-50%);
+  background: repeating-linear-gradient(90deg, currentColor 0 7px, transparent 7px 12px); color: var(--line);
+}
+.link.ok .wire { color: var(--ok); }
+.link.crit .wire { color: var(--crit); }
+.link.idle .wire { color: var(--muted); opacity: .5; }
+.link .dot {
+  position: relative; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--muted); box-shadow: 0 0 0 1px var(--line);
+}
+.link.ok .dot { background: var(--ok-soft); box-shadow: 0 0 0 1px var(--ok); transition: background .35s, box-shadow .35s; }
+.link.ok .dot.on { background: var(--led); box-shadow: 0 0 0 1px var(--ok), 0 0 10px 3px var(--led-glow); transition: none; }
+.link.crit .dot { background: var(--crit-soft); box-shadow: 0 0 0 1px var(--crit); }
+.link.crit .dot.on { background: var(--crit); box-shadow: 0 0 0 1px var(--crit), 0 0 10px 3px var(--led-crit-glow); transition: none; }
+.link.idle .dot { background: var(--track); }
+.dim { opacity: .35; }
+
+/* Bus row: [wire from trunk] [bus] [bus line] [devices, each on its own tap] */
+.busrow { display: grid; grid-template-columns: 44px minmax(0, .95fr) 76px minmax(0, 1.05fr); align-items: center; transition: opacity .2s; }
+.node {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  min-width: 0; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: opacity .2s, border-color .2s, box-shadow .2s;
+}
+.node:hover { border-color: var(--muted); }
+.node.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.node h3 { margin: 0; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 7px; min-width: 0; }
+.node h3 .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node .addr { font-family: var(--font-num); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.node .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); }
+.node .stats b { color: var(--fg); font-family: var(--font-num); font-weight: 600; font-variant-numeric: tabular-nums; }
+.node .stats b.warn { color: var(--warn); }
+.node .stats b.crit { color: var(--crit); }
+.qbar { display: inline-flex; gap: 2px; vertical-align: middle; margin-left: 4px; }
+.qbar i { width: 7px; height: 7px; border-radius: 2px; background: var(--track); }
+.qbar i.on { background: var(--accent); }
+.node .offer { font-size: 12px; color: var(--muted); }
+.node .offer b { color: var(--fg); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.chip { font-family: var(--font-num); font-size: 10.5px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.chip.w { border-color: var(--warn); color: var(--warn); }
+button.chip { font-family: var(--font-num); background: none; cursor: pointer; line-height: 1.45; }
+button.chip:hover { border-color: var(--muted); }
+button.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.fcb { font: inherit; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* The bus line: a solid line from the bus to a vertical spine, one tap per device. */
+.busline { position: relative; align-self: stretch; }
+.busline::before { content: ""; position: absolute; left: 0; right: 50%; top: 50%; height: 2px; margin-top: -1px; background: repeating-linear-gradient(90deg, var(--busc, var(--ok)) 0 7px, transparent 7px 12px); }
+.taps { display: flex; flex-direction: column; min-width: 0; margin-left: -38px; }
+.tap { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; padding-block: 5px; }
+/* spine: from the middle of the first tap to the middle of the last */
+.tap::before { content: ""; position: absolute; left: -1px; width: 2px; top: 0; bottom: 0; background: repeating-linear-gradient(180deg, var(--busc, var(--ok)) 0 7px, transparent 7px 12px); }
+.tap:first-child::before { top: 50%; }
+.tap:last-child::before { bottom: 50%; }
+.tap:only-child::before { display: none; }
+/* The LED sits halfway between the spine and the device lane. */
+.tap .stub { position: relative; height: 100%; display: flex; align-items: center; justify-content: flex-start; padding-left: 9px; }
+.tap .stub::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: repeating-linear-gradient(90deg, var(--busc, var(--ok)) 0 7px, transparent 7px 12px); }
+.tap .stub .dot {
+  position: relative; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--ok-soft); box-shadow: 0 0 0 1px var(--ok); transition: background .35s, box-shadow .35s;
+}
+.tap .stub .dot.on { background: var(--led); box-shadow: 0 0 0 1px var(--ok), 0 0 10px 3px var(--led-glow); transition: none; }
+.tap.err .stub .dot { background: var(--crit-soft); box-shadow: 0 0 0 1px var(--crit); }
+.tap.err .stub .dot.on { background: var(--crit); box-shadow: 0 0 0 1px var(--crit), 0 0 10px 3px var(--led-crit-glow); transition: none; }
+/* All wires are dashed, as in the sibling pages; a disconnected bus turns its line red. */
+.busrow.down { --busc: var(--crit); }
+
+/* Live protocol */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.tools .grow { flex: 1; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border-radius: 999px; padding: 2px 4px 2px 10px;
+}
+.filter-chip button { font: inherit; border: 0; background: none; color: inherit; cursor: pointer; padding: 0 5px; font-size: 14px; line-height: 1; }
+.table-wrap { overflow-x: auto; max-height: 440px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { padding: 5px 12px; text-align: left; white-space: nowrap; border-top: 1px solid var(--line); }
+thead th { position: sticky; top: 0; background: var(--surface); border-top: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; z-index: 1; }
+td { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+td.n, th.n { text-align: right; }
+td.src { font-family: var(--font-ui); }
+td.src .kind { margin-right: 6px; }
+tr.fresh td { animation: fresh 1.2s ease-out; }
+@keyframes fresh { from { background: var(--accent-soft); } to { background: transparent; } }
+.res { display: inline-block; font-family: var(--font-ui); font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.res.ok { color: var(--ok); background: var(--ok-soft); }
+.res.cache { color: var(--accent); background: var(--accent-soft); }
+.res.exc { color: var(--warn); background: var(--warn-soft); }
+.res.crit { color: var(--crit); background: var(--crit-soft); }
+.fcw { color: var(--warn); font-weight: 700; }
+.empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .lanes { display: none; }
+  .flowwrap { padding-block: 0; }
+  .grow-row { grid-template-columns: minmax(0, 1fr); }
+  .grow-row .link, .busrow > .link { height: 26px; }
+  .grow-row .link .wire, .busrow > .link .wire {
+    left: 50%; right: auto; top: 0; bottom: 0; width: 2px; height: auto; transform: translateX(-50%);
+    background: repeating-linear-gradient(180deg, currentColor 0 7px, transparent 7px 12px);
+  }
+  .trunk { height: 34px; }
+  .trunk::before { top: 50%; bottom: auto; left: 0; right: 0; width: auto; height: 6px; margin: -3px 0 0; }
+  .trunk span { writing-mode: horizontal-tb; transform: none; padding: 0 10px; }
+  .busrow { grid-template-columns: minmax(0, 1fr); }
+  .busline { height: 18px; }
+  .busline::before { left: 22px; right: auto; top: 0; bottom: 0; width: 2px; height: auto; margin: 0; background: repeating-linear-gradient(180deg, var(--busc, var(--ok)) 0 7px, transparent 7px 12px); }
+  .taps { margin-left: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .link .dot.on, .tap .stub .dot.on, .led.on { box-shadow: none; }
+  tr.fresh td { animation: none; }
+}
+
+/* Login, as in smartmeter and s0meter */
+.keybox {
+  max-width: 380px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 14px;
+}
+.keybox h2 { margin: 0; font-size: 18px; }
+.keybox p { margin: 0; font-size: 13px; color: var(--muted); }
+.keybox p.err { color: var(--crit); }
+.keybox input {
+  font: inherit; font-family: var(--font-num); padding: 9px 11px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%;
+}
+.keybox button {
+  align-self: flex-end; font: inherit; font-weight: 600; color: var(--surface); background: var(--accent);
+  border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="login" hidden>
+    <form class="keybox" id="keyform">
+      <h2>modbusgateway</h2>
+      <p id="keyerr" class="err" hidden>The API key was rejected. Check webserver.apiKey in the config.</p>
+      <label for="apikey" class="label">API key</label>
+      <input id="apikey" type="password" autocomplete="current-password" placeholder="webserver.apiKey" required>
+      <p>Stored in this browser only and sent as X-API-Key.</p>
+      <button type="submit">Connect</button>
+    </form>
+  </section>
+
+  <section id="main" hidden>
+    <div class="stack">
+      <header>
+        <div class="brand">
+          <!-- Three listener lines in, the gateway, the bus out. The LED flashes per request. -->
+          <svg class="mark" viewBox="0 0 40 30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 8h8M2 15h8M2 22h8"/><rect x="12" y="4" width="14" height="22" rx="3"/><path d="M28 15h10"/><circle class="led" id="logoled" cx="19" cy="10" r="1.8" stroke="none"/>
+          </svg>
+          <div class="words"><h1>modbus<b>gateway</b></h1><span class="sub">Modbus RTU / TCP / REST gateway</span></div>
+          <div class="words device"><span class="host" id="host">–</span><span class="sub">host</span></div>
+        </div>
+        <div class="meta">
+          <span class="pill off" id="state">…</span>
+          <button type="button" class="signout" id="signout">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6"/><path d="M10.5 11 13.5 8l-3-3"/><path d="M13.5 8H6"/></svg>Sign out
+          </button>
+        </div>
+      </header>
+
+      <div class="banner" id="banner" role="status" hidden></div>
+
+      <div class="stack content" id="content">
+        <section class="stack" style="gap:10px" aria-labelledby="flow-h">
+          <div class="sec-head">
+            <h2 id="flow-h">Communication</h2>
+            <details class="help">
+              <summary>How to read</summary>
+              <div class="pop">
+                <h4>Communication</h4>
+                <dl>
+                  <dt>Clients</dt><dd>talk to the gateway only, through one of its listeners</dd>
+                  <dt>Gateway</dt><dd>queues each request on the bus of the addressed device</dd>
+                  <dt>Bus</dt><dd>one request at a time; each device has its own tap</dd>
+                  <dt>LEDs</dt><dd>flash once per request; red after an error</dd>
+                  <dt>Listed</dt><dd>until 10 min after the last Modbus request, 8 per listener</dd>
+                  <dt>REST</dt><dd>only calls of <span class="num">/devices/…</span> count</dd>
+                  <dt>Modbus RTU</dt><dd>a fixed line, always shown</dd>
+                  <dt>Filter</dt><dd>click a client, bus, device or FC; filters combine</dd>
+                </dl>
+              </div>
+            </details>
+          </div>
+          <div class="flowwrap">
+            <!-- Lanes behind the diagram: one tinted column each for listeners, buses and devices. -->
+            <div class="lanes" aria-hidden="true">
+              <div class="lane"><span class="label">Listeners &amp; clients</span></div>
+              <div></div>
+              <div class="lanes-r"><div></div><div class="lane"><span class="label">Buses</span></div><div></div><div class="lane"><span class="label">Devices</span></div></div>
+            </div>
+            <div class="flow">
+              <div class="col" id="groups"></div>
+              <div class="trunk"><span>gateway</span></div>
+              <div class="col" id="buses"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="stack" style="gap:10px" aria-labelledby="log-h">
+          <div class="sec-head">
+            <h2 id="log-h"><button type="button" class="fold" id="fold" aria-expanded="true" aria-controls="logpanel"><span class="chev" aria-hidden="true">▾</span>Live protocol</button></h2>
+            <details class="help" id="loghelp">
+              <summary>How to read</summary>
+              <div class="pop">
+                <h4>Live protocol</h4>
+                <dl>
+                  <dt>Rows</dt><dd>the last 100 transactions, newest first</dd>
+                  <dt>Values</dt><dd>never shown, only who asked for what</dd>
+                  <dt>FC</dt><dd>click one to filter by it</dd>
+                  <dt>Result</dt><dd class="legend">
+                    <span><span class="res ok">ok</span> answered over the bus</span>
+                    <span><span class="res cache">cache</span> answered without bus access</span>
+                    <span><span class="res exc">IllegalDataAddress</span> exception of the device</span>
+                    <span><span class="res crit">timeout</span> no answer from the device</span>
+                    <span><span class="res crit">forbidden</span> FC not in <span class="num">functions</span></span>
+                  </dd>
+                </dl>
+              </div>
+            </details>
+          </div>
+          <div class="panel" id="logpanel">
+            <div class="tools">
+              <span class="label">FC</span>
+              <div class="seg" role="group" aria-label="Filter by function code">
+                <button type="button" data-access="all" aria-pressed="true">All</button>
+                <button type="button" data-access="read" aria-pressed="false" title="FC1, FC2, FC3, FC4">Reads</button>
+                <button type="button" data-access="write" aria-pressed="false" title="FC5, FC6, FC15, FC16">Writes</button>
+              </div>
+              <span class="label">Result</span>
+              <div class="seg" role="group" aria-label="Filter by result">
+                <button type="button" data-answer="all" aria-pressed="true">All</button>
+                <button type="button" data-answer="bus" aria-pressed="false" title="Went over the bus, with or without error">Bus</button>
+                <button type="button" data-answer="cache" aria-pressed="false" title="Answered from the cache, no bus access">Cache</button>
+                <button type="button" data-answer="err" aria-pressed="false" title="Timeouts, exceptions of the device, rejected requests">Errors</button>
+              </div>
+              <span id="chips"></span>
+              <span class="grow"></span>
+              <span class="label" id="count"></span>
+              <button type="button" class="btn" id="pause" aria-pressed="false">Pause</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th>Time</th><th>Source</th><th>Device</th><th>FC</th><th class="n">Address</th><th class="n">Qty</th><th>Result</th><th class="n">ms</th>
+                </tr></thead>
+                <tbody id="log"></tbody>
+              </table>
+              <div class="empty" id="empty" hidden>No transaction matches the filter.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <span>Updated <span class="num" id="updated">–</span> · refreshes every 2 s</span>
+        <span>up <span class="num" id="uptime">–</span> · <span class="num" id="version">–</span></span>
+      </footer>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const POLL_MS = 2000;
+const KEY = "modbusgateway.apiKey";
+const FOLD = "modbusgateway.logOpen";
+const MAX_FLASHES = 12;  // per poll and LED, so a busy LED blinks instead of flickering
+const PER_LISTENER = 8;  // clients shown per listener before "+ N more"
+const RECENT_MS = 5 * 60 * 1000; // timeouts and errors this young count for the state
+const $ = id => document.getElementById(id);
+
+const KIND = { rest: "REST", tcp: "Modbus TCP", rtu: "Modbus RTU" };
+
+let apiKey = load(KEY);
+let timer = null;
+let lastOk = null;            // time of the last successful poll
+let data = null;              // { health, devices, activity } of the last poll
+let lastSeen = null;          // time of the newest transaction already shown, for LEDs and highlights
+let prevBus = null;           // { name: { tx, at } } of the previous poll, for tx/s
+let busRate = {};             // { name: transactions per second } between the last two polls
+let paused = false;
+let logRecent = [];           // the protocol shown; frozen while paused
+let logOpen = load(FOLD) !== "0";
+let access = "all", answer = "all";
+let fClient = null, fDevice = null, fBus = null, fFc = null;
+const expanded = {};
+
+function load(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } }
+function store(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} }
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function hms(d) { return d.toTimeString().slice(0, 8); }
+// 1m, 3h 12m, 2d 4h: the two largest units, as in the sibling pages.
+function uptime(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+function ago(iso) {
+  if (!iso) return "–";
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s} s ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  return `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} min ago`;
+}
+function since(iso) {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  return s < 3600 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} min`;
+}
+// ":8443" for a listener on every address, else host:port as configured.
+const where = addr => addr.replace(/^(0\.0\.0\.0|\[::\]|)(?=:\d+$)/, "");
+// The last part of a serial port path: /dev/ttyUSB2 -> ttyUSB2.
+const portName = path => path.split("/").pop();
+const ms = sec => sec * 1000 < 1 && sec > 0 ? "<1" : String(Math.round(sec * 1000));
+const young = iso => iso && Date.now() - Date.parse(iso) < RECENT_MS;
+const clientKey = c => `${c.source}|${c.address || ""}`;
+const resClass = cls => ({ ok: "ok", cache: "cache", exception: "exc" })[cls] || "crit";
+
+// ---- Selection ---------------------------------------------------------------------------
+// Which client used which device with which FC: from the protocol, plus the targets of the
+// clients (FC unknown) so a quiet client still links to its devices.
+function pairs() {
+  const list = data.activity.recent.map(t => ({ client: `${t.source}|${t.client || ""}`, device: t.device, fc: t.functionCode }));
+  for (const c of data.activity.clients) for (const t of c.targets) list.push({ client: clientKey(c), device: t.device, fc: null });
+  return list;
+}
+const busOf = device => data.devices.find(d => d.device === device)?.bus;
+function fits(p) {
+  return (!fClient || p.client === fClient) && (!fDevice || p.device === fDevice) &&
+    (!fBus || busOf(p.device) === fBus) && (!fFc || p.fc === fFc);
+}
+const anyFilter = () => fClient || fDevice || fBus || fFc;
+// dimmed: an element no pair under the current filters touches.
+function dimmed(test) {
+  if (!anyFilter()) return false;
+  return !pairs().some(p => fits(p) && test(p));
+}
+
+// ---- Communication -------------------------------------------------------------------------
+function link(id, cls) { return `<div class="link ${cls}"><span class="wire"></span><span class="dot" data-led="${esc(id)}"></span></div>`; }
+
+function renderGroups() {
+  const a = data.activity;
+  $("groups").innerHTML = a.listeners.map(l => {
+    const members = a.clients.filter(c => c.source === l.source).sort((x, y) => y.perMinute - x.perMinute || Date.parse(y.lastAt) - Date.parse(x.lastAt));
+    const settings = l.source === "rest" ? "HTTPS" : l.source === "tcp"
+      ? `${l.openConnections} open connection${l.openConnections === 1 ? "" : "s"}` : l.settings;
+    const shown = expanded[l.source] ? members : members.slice(0, PER_LISTENER);
+    const hidden = members.length - shown.length;
+    let rows = shown.map(c => clientRow(l, c)).join("");
+    if (!rows) rows = `<div class="empty-row">${l.source === "rtu" ? "No request on the line in the last 10 min." : "No client in the last 10 min."}</div>`;
+    const more = hidden > 0 ? `<button type="button" class="more" data-more="${l.source}">+ ${hidden} more</button>`
+      : expanded[l.source] && members.length > PER_LISTENER ? `<button type="button" class="more" data-more="${l.source}">Show fewer</button>` : "";
+    const requests = members.reduce((s, c) => s + c.perMinute, 0);
+    const errors = members.some(c => c.errors * 10 > c.requests && c.requests);
+    return `<div class="grow-row">
+      <div class="group">
+        <div class="ghead"><span class="kind ${l.source}">${KIND[l.source]}</span><span class="where">${esc(where(l.address))}</span><span class="set">· ${esc(settings || "")}</span>
+          <span class="extra"><b>${members.length}</b> client${members.length === 1 ? "" : "s"}</span></div>
+        <div class="clients">${rows}</div>${more}
+      </div>${link("g:" + l.source, !requests ? "idle" : errors ? "crit" : "ok")}</div>`;
+  }).join("");
+}
+
+function clientRow(l, c) {
+  const key = clientKey(c);
+  const errPct = c.requests ? Math.round(c.errors * 100 / c.requests) : 0;
+  const ecls = errPct >= 10 ? "crit" : errPct >= 3 ? "warn" : "";
+  const targets = c.targets.map(t => l.source === "rest" ? `<b>${esc(t.device)}</b>` : `unit ${t.unitId} <b>${esc(t.device)}</b>`).join(", ");
+  const sel = fClient === key;
+  const dim = !sel && dimmed(p => p.client === key);
+  const gone = c.connected === false;
+  const rate = `<b>${c.perMinute}</b>/min · err <b class="${ecls}">${errPct} %</b> · ${ago(c.lastAt)}`;
+  let head = `<span class="ip">${esc(c.address)}</span>`, state = "";
+  if (l.source === "tcp") state = gone ? "not connected" : `connected ${since(c.connectedSince)}`;
+  if (l.source === "rtu") {
+    // A serial line carries no client address: the row names what is asked for instead.
+    head = `<span class="ip" style="font-family:var(--font-ui);font-weight:500">${targets || "–"}</span>`;
+    state = "Requests on the serial line; the client there has no address.";
+  }
+  return `<div class="client${gone ? " gone" : ""}${sel ? " sel" : ""}${dim ? " dim" : ""}" title="Filter by this client" role="button" tabindex="0" data-client="${esc(key)}" aria-pressed="${sel}">
+    <span class="led${gone || !c.perMinute ? " off" : ""}" data-led="${esc("c:" + key)}"></span>
+    ${head}<span class="rate">${rate}</span>
+    ${l.source !== "rtu" && targets ? `<span class="to">→ ${targets}</span>` : ""}
+    ${state ? `<span class="state">${state}</span>` : ""}
+  </div>`;
+}
+
+// rates computes tx/s per bus from the transactions counted since the previous poll. The first
+// poll has none: it estimates from the bus transactions of the last 10 s in the protocol.
+function rates(buses, recent, devices, now) {
+  const next = {};
+  busRate = {};
+  const onBus = ["ok", "exception", "timeout", "error"];
+  for (const b of buses) {
+    const prev = prevBus?.[b.name];
+    if (prev && now > prev.at) {
+      busRate[b.name] = Math.max(0, b.transactions - prev.tx) / ((now - prev.at) / 1000);
+    } else {
+      const names = new Set(devices.filter(d => d.bus === b.name).map(d => d.device));
+      const times = recent.filter(t => names.has(t.device) && onBus.includes(t.class)).map(t => Date.parse(t.time)).filter(t => now - t < 10000);
+      const span = recent.length ? Math.min(10000, now - Date.parse(recent[recent.length - 1].time)) : 0;
+      if (span > 1000) busRate[b.name] = times.length / (span / 1000);
+    }
+    next[b.name] = { tx: b.transactions, at: now };
+  }
+  prevBus = next;
+}
+
+function renderBuses() {
+  const a = data.activity;
+  $("buses").innerHTML = a.buses.map(b => {
+    const rate = busRate[b.name] ?? null;
+    const q = Math.min(b.queueLen, 8);
+    const qbar = Array.from({ length: 8 }, (_, i) => `<i class="${i < q ? "on" : ""}"></i>`).join("");
+    const taps = data.devices.filter(d => d.bus === b.name).map(d => deviceTap(d)).join("");
+    const sel = fBus === b.name;
+    const dim = !sel && dimmed(p => busOf(p.device) === b.name);
+    return `<div class="busrow${b.connected ? "" : " down"}${dim ? " dim" : ""}">
+      ${link("b:" + b.name, b.connected ? "ok" : "crit")}
+      <div class="node${sel ? " sel" : ""}" title="Filter by this bus" role="button" tabindex="0" data-bus="${esc(b.name)}" aria-pressed="${sel}">
+        <h3><span class="kind ${b.type}">${KIND[b.type]}</span><span class="t">${esc(b.name)}</span></h3>
+        <div class="addr">${esc(b.address)}</div>
+        <div class="stats">${b.connected ? "" : `<span><b class="crit">disconnected</b></span>`}<span><b>${rate === null ? "–" : rate.toFixed(1)}</b> tx/s</span><span>Ø <b>${ms(b.meanDuration)}</b> ms</span></div>
+        <div class="stats"><span title="Since the start">timeouts <b class="${b.timeouts ? "warn" : ""}">${b.timeouts}</b></span><span><b>${b.queueLen}</b> waiting<span class="qbar" aria-hidden="true">${qbar}</span></span></div>
+      </div>
+      <div class="busline"></div>
+      <div class="taps">${taps}</div>
+    </div>`;
+  }).join("");
+}
+
+function deviceTap(d) {
+  const reach = `reachable via <b>REST</b> as <span class="num">/devices/${esc(d.device)}</span>` +
+    (d.gateway ? ` and <b>${KIND[d.gateway.listener]}</b> as <b>unit ${d.gateway.unitId}</b>` : " only");
+  const chips = d.functions.map(f => {
+    const n = +f.slice(2);
+    return `<button type="button" class="chip${n >= 5 ? " w" : ""}${fFc === n ? " on" : ""}" data-fc="${n}" aria-pressed="${fFc === n}">${f}</button>`;
+  }).join("");
+  const reads = d.cacheHits + d.cacheMisses;
+  const cache = d.cacheTTL ? `<span>cache <b>${d.cacheTTL} s</b> · <b>${reads ? Math.round(d.cacheHits * 100 / reads) : 0} %</b> hits</span>` : `<span>cache <b>off</b></span>`;
+  // The result of the last failed transaction names the error; the status text is the fallback.
+  const lastFail = data.activity.recent.find(t => t.device === d.device && ["exception", "timeout", "error"].includes(t.class));
+  const errName = lastFail && Math.abs(Date.parse(lastFail.time) - Date.parse(d.lastErrorAt)) < 5000 ? lastFail.result : "error";
+  const errLine = young(d.lastErrorAt) ? `<span title="${esc(d.lastError || "")}">last error <b class="crit">${esc(errName)}</b> ${ago(d.lastErrorAt)}</span>` : "";
+  const failing = d.lastErrorAt && (!d.lastSuccessAt || Date.parse(d.lastErrorAt) > Date.parse(d.lastSuccessAt));
+  const sel = fDevice === d.device;
+  const dim = !sel && dimmed(p => p.device === d.device);
+  return `<div class="tap${failing ? " err" : ""}${dim ? " dim" : ""}">
+    <div class="stub"><span class="dot" data-led="${esc("d:" + d.device)}"></span></div>
+    <div class="node${sel ? " sel" : ""}" title="Filter by this device" role="button" tabindex="0" data-device="${esc(d.device)}" aria-pressed="${sel}">
+      <h3><span class="t">${esc(d.device)}</span><span class="kind" title="Unit ID on the bus">unit ${d.unitId}</span></h3>
+      <div class="offer">${reach}</div>
+      <div class="chips">${chips}</div>
+      <div class="stats">${cache}</div>
+      <div class="stats"><span>ok <b>${ago(d.lastSuccessAt)}</b></span>${errLine}</div>
+    </div>
+  </div>`;
+}
+
+// ---- State and banner ----------------------------------------------------------------------
+function renderState() {
+  const down = data.activity.buses.filter(b => !b.connected && b.transactions > 0);
+  const timeouts = {};
+  for (const t of data.activity.recent) if (t.class === "timeout" && young(t.time)) timeouts[t.device] = (timeouts[t.device] || 0) + 1;
+  const names = Object.keys(timeouts);
+  const st = $("state"), banner = $("banner");
+  st.title = "Timeouts and connection errors in the last 5 min";
+  banner.hidden = true;
+  if (down.length) {
+    st.className = "pill crit";
+    st.textContent = down.length === 1 ? `${down[0].name} disconnected` : `${down.length} buses disconnected`;
+    banner.className = "banner";
+    banner.textContent = `${down.map(b => b.name).join(", ")}: the connection is closed; the next request opens it again.`;
+    banner.hidden = false;
+  } else if (names.length) {
+    st.className = "pill warn";
+    st.textContent = names.length === 1 ? `${names[0]}: ${timeouts[names[0]]} timeout${timeouts[names[0]] === 1 ? "" : "s"}` : `${names.length} devices with timeouts`;
+    banner.className = "banner warn";
+    banner.innerHTML = names.map(n => `<span><b>${esc(n)}:</b> ${timeouts[n]} timeout${timeouts[n] === 1 ? "" : "s"} in the last 5 min. Requests to the other devices on ${esc(busOf(n) || "its bus")} waited meanwhile.</span>`).join(" ");
+    banner.hidden = false;
+  } else {
+    st.className = "pill ok";
+    st.textContent = "All devices OK";
+  }
+}
+
+// ---- Live protocol -------------------------------------------------------------------------
+function matches(t) {
+  if (!fits({ client: `${t.source}|${t.client || ""}`, device: t.device, fc: t.functionCode })) return false;
+  const write = t.functionCode >= 5;
+  if (access === "read" && write) return false;
+  if (access === "write" && !write) return false;
+  if (answer === "bus") return ["ok", "exception", "timeout", "error"].includes(t.class);
+  if (answer === "cache") return t.class === "cache";
+  if (answer === "err") return !["ok", "cache"].includes(t.class);
+  return true;
+}
+
+function renderLog(fresh) {
+  const recent = logRecent;
+  const rtu = data.activity.listeners.find(l => l.source === "rtu");
+  const rows = recent.filter(matches);
+  $("log").innerHTML = rows.map(t => {
+    const who = t.source === "rtu" ? (rtu ? portName(rtu.address) : "serial line") : t.client;
+    const via = t.source === "rest" ? "" : ` → u${t.unitId}`;
+    return `<tr${fresh && Date.parse(t.time) > fresh ? ' class="fresh"' : ""}><td>${hms(new Date(t.time))}</td>
+      <td class="src"><span class="kind ${t.source}">${KIND[t.source]}</span><span class="num">${esc(who)}${via}</span></td>
+      <td>${esc(t.device)}</td><td><button type="button" class="fcb${t.functionCode >= 5 ? " fcw" : ""}" data-fc="${t.functionCode}" title="Filter by FC${t.functionCode}">FC${t.functionCode}</button></td>
+      <td class="n">${t.address}</td><td class="n">${t.quantity}</td>
+      <td><span class="res ${resClass(t.class)}">${esc(t.result)}</span></td><td class="n">${ms(t.duration)}</td></tr>`;
+  }).join("");
+  $("empty").hidden = rows.length > 0;
+  $("count").textContent = `${rows.length} of ${recent.length}`;
+
+  const chips = [];
+  const chip = (text, k) => chips.push(`<span class="filter-chip">${esc(text)}<button type="button" data-clear="${k}" aria-label="Remove filter">×</button></span>`);
+  if (fClient) { const [s, addr] = fClient.split("|"); chip(`${KIND[s]} ${addr || (rtu ? portName(rtu.address) : "")}`, "client"); }
+  if (fBus) chip(fBus, "bus");
+  if (fDevice) chip(fDevice, "device");
+  if (fFc) chip(`FC${fFc}`, "fc");
+  if (chips.length > 1) chips.push(`<button type="button" class="btn" data-clear="all">Clear all</button>`);
+  $("chips").innerHTML = chips.join(" ");
+}
+
+function applyFold() {
+  const b = $("fold");
+  b.setAttribute("aria-expanded", logOpen);
+  $("logpanel").hidden = !logOpen;
+  $("loghelp").hidden = !logOpen;
+  if (!logOpen) $("loghelp").open = false;
+  b.querySelector(".off")?.remove();
+  if (!logOpen) b.insertAdjacentHTML("beforeend", `<span class="off">hidden, not updated</span>`);
+}
+
+// ---- LEDs ----------------------------------------------------------------------------------
+function flash(el) {
+  if (!el) return;
+  el.classList.add("on");
+  setTimeout(() => el.classList.remove("on"), 110);
+}
+// Flash the LEDs for the transactions new since the previous poll, spread over the next interval.
+function blink(newer) {
+  const counts = {};
+  const add = id => { counts[id] = (counts[id] || 0) + 1; };
+  for (const t of newer) {
+    const client = `${t.source}|${t.client || ""}`;
+    add("logo"); add("c:" + client); add("g:" + t.source);
+    if (["ok", "exception", "timeout", "error"].includes(t.class)) { add("b:" + busOf(t.device)); add("d:" + t.device); }
+  }
+  for (const [id, added] of Object.entries(counts)) {
+    const n = Math.min(added, MAX_FLASHES);
+    for (let i = 0; i < n; i++) setTimeout(() => {
+      flash(id === "logo" ? $("logoled") : document.querySelector(`[data-led="${CSS.escape(id)}"]`));
+    }, (i + 0.5) * POLL_MS / n);
+  }
+}
+
+// ---- Rendering and polling ------------------------------------------------------------------
+function render(fresh) {
+  if (!data) return;
+  const h = data.health;
+  $("host").textContent = h.hostname;
+  document.title = `modbusgateway · ${h.hostname}`;
+  $("uptime").textContent = uptime(h.uptimeSeconds);
+  $("version").textContent = h.appVersion;
+  renderGroups();
+  renderBuses();
+  renderState();
+  if (!paused) logRecent = data.activity.recent;
+  if (logOpen) renderLog(fresh);
+}
+
+function showLogin(rejected) {
+  stop();
+  $("main").hidden = true;
+  $("login").hidden = false;
+  $("keyerr").hidden = !rejected;
+  $("apikey").value = "";
+  $("apikey").focus();
+}
+function signedOut(rejected) { apiKey = ""; store(KEY, ""); showLogin(rejected); }
+
+function stale(reason) {
+  $("banner").textContent = reason + (lastOk ? ` The values below are from ${hms(lastOk)}.` : "");
+  $("banner").className = "banner";
+  $("banner").hidden = false;
+  $("content").classList.add("stale");
+  $("state").className = "pill off";
+  $("state").textContent = "No connection";
+}
+
+async function get(path) {
+  const r = await fetch(path, { headers: { "X-API-Key": apiKey }, cache: "no-store" });
+  if (r.status === 401) throw Object.assign(new Error("unauthorized"), { auth: true });
+  if (!r.ok) {
+    let msg = `${path} answered ${r.status}`;
+    try { msg = (await r.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+async function poll() {
+  try {
+    const [health, devices, activity] = await Promise.all([get("health"), get("devices"), get("activity")]);
+    data = { health, devices, activity };
+    rates(activity.buses, activity.recent, devices, Date.now());
+    lastOk = new Date();
+    $("updated").textContent = hms(lastOk);
+    $("content").classList.remove("stale");
+    const newest = activity.recent.length ? Date.parse(activity.recent[0].time) : lastSeen;
+    // The first poll after a start or a pause shows the protocol without flashing it all.
+    const fresh = lastSeen;
+    if (lastSeen !== null) blink(activity.recent.filter(t => Date.parse(t.time) > lastSeen));
+    lastSeen = newest ?? lastSeen ?? 0;
+    render(fresh);
+  } catch (e) {
+    if (e.auth) return signedOut(true);
+    stale(e instanceof TypeError ? "Cannot reach modbusgateway." : `modbusgateway returned an error: ${e.message}.`);
+  }
+}
+
+function start() {
+  stop();
+  $("login").hidden = true;
+  $("main").hidden = false;
+  lastSeen = null;
+  prevBus = null;
+  poll();
+  timer = setInterval(poll, POLL_MS);
+}
+function stop() { clearInterval(timer); timer = null; }
+
+// ---- Events ---------------------------------------------------------------------------------
+$("keyform").addEventListener("submit", e => {
+  e.preventDefault();
+  apiKey = $("apikey").value.trim();
+  if (!apiKey) return;
+  store(KEY, apiKey);
+  start();
+});
+$("signout").addEventListener("click", () => signedOut(false));
+
+document.addEventListener("click", ev => {
+  const fcBtn = ev.target.closest("[data-fc]");
+  const node = fcBtn ? null : ev.target.closest("[data-client],[data-device],[data-bus]");
+  const clr = ev.target.closest("[data-clear]");
+  const accBtn = ev.target.closest("[data-access]");
+  const ansBtn = ev.target.closest("[data-answer]");
+  const moreBtn = ev.target.closest("[data-more]");
+  if (ev.target.closest("#fold")) {
+    logOpen = !logOpen;
+    store(FOLD, logOpen ? "1" : "0");
+    applyFold();
+    if (!logOpen) return;
+  } else if (fcBtn) {
+    const f = +fcBtn.dataset.fc;
+    fFc = fFc === f ? null : f;
+  } else if (moreBtn) {
+    expanded[moreBtn.dataset.more] = !expanded[moreBtn.dataset.more];
+  } else if (clr) {
+    const k = clr.dataset.clear;
+    if (k === "all") fClient = fDevice = fBus = fFc = null;
+    else if (k === "client") fClient = null; else if (k === "device") fDevice = null;
+    else if (k === "bus") fBus = null; else fFc = null;
+  } else if (node) {
+    // Filters combine: one client, one bus, one device and one FC at a time; a click on the
+    // selected one removes it. A device on another bus replaces the bus filter, and vice versa.
+    const { client, device, bus } = node.dataset;
+    if (client) fClient = fClient === client ? null : client;
+    if (device) {
+      fDevice = fDevice === device ? null : device;
+      if (fDevice && fBus && busOf(fDevice) !== fBus) fBus = null;
+    }
+    if (bus) {
+      fBus = fBus === bus ? null : bus;
+      if (fBus && fDevice && busOf(fDevice) !== fBus) fDevice = null;
+    }
+  } else if (accBtn) {
+    access = accBtn.dataset.access;
+    document.querySelectorAll("[data-access]").forEach(b => b.setAttribute("aria-pressed", b === accBtn));
+  } else if (ansBtn) {
+    answer = ansBtn.dataset.answer;
+    document.querySelectorAll("[data-answer]").forEach(b => b.setAttribute("aria-pressed", b === ansBtn));
+  } else if (ev.target.id === "pause") {
+    paused = !paused;
+    ev.target.textContent = paused ? "Resume" : "Pause";
+    ev.target.setAttribute("aria-pressed", paused);
+  } else return;
+  if (data) render(null);
+});
+document.addEventListener("keydown", ev => {
+  if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches("[role='button']")) { ev.preventDefault(); ev.target.click(); }
+});
+// Poll only while the page is visible.
+document.addEventListener("visibilitychange", () => {
+  if (!apiKey) return;
+  if (document.hidden) stop(); else start();
+});
+
+applyFold();
+if (apiKey) start(); else showLogin(false);
+</script>
+</body>
+</html>

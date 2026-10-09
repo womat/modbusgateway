@@ -15,6 +15,37 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/activity": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the listeners, the clients of the last 10 min (REST callers of /devices/…, Modbus TCP connections, the Modbus RTU line), the buses and the last 100 transactions. No register values.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "info"
+                ],
+                "summary": "Get the communication activity",
+                "responses": {
+                    "200": {
+                        "description": "Activity",
+                        "schema": {
+                            "$ref": "#/definitions/app.ActivityResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/devices": {
             "get": {
                 "security": [
@@ -714,6 +745,143 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "app.ActivityResponse": {
+            "type": "object",
+            "properties": {
+                "buses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/app.BusActivity"
+                    }
+                },
+                "clients": {
+                    "description": "the most recent first",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/app.ClientActivity"
+                    }
+                },
+                "listeners": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/app.ListenerActivity"
+                    }
+                },
+                "recent": {
+                    "description": "the last 100, newest first",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/app.TransactionActivity"
+                    }
+                }
+            }
+        },
+        "app.BusActivity": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "host:port, or the serial port with its line settings",
+                    "type": "string"
+                },
+                "connected": {
+                    "type": "boolean"
+                },
+                "errors": {
+                    "type": "integer"
+                },
+                "lastConnectAt": {
+                    "type": "string"
+                },
+                "meanDuration": {
+                    "description": "seconds per transaction",
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "queueLen": {
+                    "type": "integer"
+                },
+                "queueSize": {
+                    "type": "integer"
+                },
+                "timeouts": {
+                    "type": "integer"
+                },
+                "transactions": {
+                    "description": "since the start",
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "tcp | rtu",
+                    "type": "string"
+                }
+            }
+        },
+        "app.ClientActivity": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "connected": {
+                    "description": "tcp: a connection is open",
+                    "type": "boolean"
+                },
+                "connectedSince": {
+                    "description": "tcp: the oldest open connection",
+                    "type": "string"
+                },
+                "errors": {
+                    "description": "timeouts, exceptions and refused requests",
+                    "type": "integer"
+                },
+                "firstAt": {
+                    "type": "string"
+                },
+                "lastAt": {
+                    "type": "string"
+                },
+                "perMinute": {
+                    "description": "requests in the last 60 s",
+                    "type": "integer"
+                },
+                "requests": {
+                    "type": "integer"
+                },
+                "source": {
+                    "description": "rest | tcp | rtu",
+                    "type": "string"
+                },
+                "targets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/app.TargetActivity"
+                    }
+                }
+            }
+        },
+        "app.ListenerActivity": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "description": "host:port, or the serial port",
+                    "type": "string"
+                },
+                "openConnections": {
+                    "description": "tcp: open connections, silent ones included",
+                    "type": "integer"
+                },
+                "settings": {
+                    "description": "rtu: line settings, e.g. 9600 8N1",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "rest | tcp | rtu",
+                    "type": "string"
+                }
+            }
+        },
         "app.ModbusErrorResponse": {
             "type": "object",
             "properties": {
@@ -749,6 +917,60 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                }
+            }
+        },
+        "app.TargetActivity": {
+            "type": "object",
+            "properties": {
+                "device": {
+                    "type": "string"
+                },
+                "unitId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "app.TransactionActivity": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "integer"
+                },
+                "class": {
+                    "description": "ok | cache | exception | timeout | error | rejected",
+                    "type": "string"
+                },
+                "client": {
+                    "description": "IP address; empty for the serial line",
+                    "type": "string"
+                },
+                "device": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "number"
+                },
+                "functionCode": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "result": {
+                    "description": "ok, cache, timeout, forbidden, the exception of the device, ...",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "rest | tcp | rtu",
+                    "type": "string"
+                },
+                "time": {
+                    "type": "string"
+                },
+                "unitId": {
+                    "description": "the unit ID used on a Modbus listener",
+                    "type": "integer"
                 }
             }
         },
@@ -809,6 +1031,10 @@ const docTemplate = `{
                 "cacheMisses": {
                     "type": "integer"
                 },
+                "cacheTTL": {
+                    "description": "seconds a read stays in the cache; 0 = no cache",
+                    "type": "number"
+                },
                 "connected": {
                     "description": "the bus connection is open",
                     "type": "boolean"
@@ -826,10 +1052,22 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "gateway": {
+                    "description": "the Modbus listener that offers the device",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/modbusclient.Gateway"
+                        }
+                    ]
+                },
                 "lastConnectAt": {
                     "type": "string"
                 },
                 "lastError": {
+                    "type": "string"
+                },
+                "lastErrorAt": {
+                    "description": "lastError stays until the next error",
                     "type": "string"
                 },
                 "lastRequestAt": {
@@ -846,6 +1084,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "unitId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "modbusclient.Gateway": {
+            "type": "object",
+            "properties": {
+                "listener": {
+                    "description": "tcp | rtu",
+                    "type": "string"
+                },
+                "unitId": {
+                    "description": "the unit ID on that listener",
                     "type": "integer"
                 }
             }

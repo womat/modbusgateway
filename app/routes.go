@@ -4,7 +4,8 @@
 // - Public routes without authentication (e.g., version)
 // - Protected routes requiring API key or JWT
 // - Swagger documentation (only in development) at /swagger/
-// - Health, device status, and the Modbus read (GET) and write (PUT) endpoints
+// - The web page at / (public, it holds no data)
+// - Health, device status, activity, and the Modbus read (GET) and write (PUT) endpoints
 //
 // Middleware applied:
 // - CORS
@@ -37,13 +38,15 @@ func (app *App) SetupRoutes() {
 	// Dev-only Swagger documentation (only registered with -tags swagger)
 	app.registerSwaggerRoute(mux)
 
-	// Public routes
+	// Public routes: the web page holds no data, its script calls the protected routes
+	mux.Handle("GET /{$}", app.HandleUI())
 	mux.Handle("GET /version", app.HandleVersion())
 
 	// Protected routes
 	mux.Handle("GET /health", web.WithAuth(app.HandleHealth(), webCfg))
 	mux.Handle("GET /devices", web.WithAuth(app.HandleModbusListDeviceStatus(), webCfg))
 	mux.Handle("GET /devices/{device}/status", web.WithAuth(app.HandleModbusGetDeviceStatus(), webCfg))
+	mux.Handle("GET /activity", web.WithAuth(app.HandleActivity(), webCfg))
 
 	// Modbus read routes
 	mux.Handle("GET /devices/{device}/coils/{address}", web.WithAuth(app.HandleModbusReadCoils(), webCfg))                        // Function code 1: Read Coils

@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/womat/golib/web"
 	"github.com/womat/modbusgateway/app/service/modbusclient"
+	"github.com/womat/modbusgateway/pkg/activity"
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
@@ -123,7 +126,7 @@ func (app *App) HandleModbusGetDeviceStatus() http.Handler {
 //	@Failure		401			{string}	string							"Unauthorized"
 //	@Router			/devices/{device}/coils/{address} [get]
 func (app *App) HandleModbusReadCoils() http.Handler {
-	return app.handleReadBits(func(req modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error) {
+	return app.handleReadBits(1, func(req modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error) {
 		return app.modbusClient.ReadCoils(req)
 	})
 }
@@ -148,7 +151,7 @@ func (app *App) HandleModbusReadCoils() http.Handler {
 //	@Failure		401			{string}	string							"Unauthorized"
 //	@Router			/devices/{device}/discrete-inputs/{address} [get]
 func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
-	return app.handleReadBits(func(req modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error) {
+	return app.handleReadBits(2, func(req modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error) {
 		return app.modbusClient.ReadDiscreteInputs(req)
 	})
 }
@@ -173,7 +176,7 @@ func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
 //	@Failure		401			{string}	string								"Unauthorized"
 //	@Router			/devices/{device}/holding-registers/{address} [get]
 func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
-	return app.handleReadRegisters(func(req modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error) {
+	return app.handleReadRegisters(3, func(req modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error) {
 		return app.modbusClient.ReadHoldingRegisters(req)
 	})
 }
@@ -198,7 +201,7 @@ func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
 //	@Failure		401			{string}	string								"Unauthorized"
 //	@Router			/devices/{device}/input-registers/{address} [get]
 func (app *App) HandleModbusReadInputRegisters() http.Handler {
-	return app.handleReadRegisters(func(req modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error) {
+	return app.handleReadRegisters(4, func(req modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error) {
 		return app.modbusClient.ReadInputRegisters(req)
 	})
 }
@@ -224,15 +227,19 @@ func (app *App) HandleModbusReadInputRegisters() http.Handler {
 //	@Failure		401		{string}	string						"Unauthorized"
 //	@Router			/devices/{device}/coils/{address} [put]
 func (app *App) HandleModbusWriteCoils() http.Handler {
-	return app.handleWrite(func(device string, register uint16, r *http.Request) (modbusclient.WriteResponse, error) {
+	return app.handleWrite(func(device string, register uint16, r *http.Request) (writeCall, error) {
 		var body ModbusWriteCoilsRequest
 		if err := decodeWriteBody(r, &body, func() (bool, bool) { return body.Value != nil, body.Values != nil }); err != nil {
-			return modbusclient.WriteResponse{}, err
+			return writeCall{}, err
 		}
 		if body.Value != nil {
-			return app.modbusClient.WriteSingleCoil(modbusclient.WriteSingleCoilRequest{Device: device, Register: register, Value: *body.Value})
+			return writeCall{fc: 5, qty: 1, do: func() (modbusclient.WriteResponse, error) {
+				return app.modbusClient.WriteSingleCoil(modbusclient.WriteSingleCoilRequest{Device: device, Register: register, Value: *body.Value})
+			}}, nil
 		}
-		return app.modbusClient.WriteMultipleCoils(modbusclient.WriteMultipleCoilsRequest{Device: device, Register: register, Values: body.Values})
+		return writeCall{fc: 15, qty: uint16(len(body.Values)), do: func() (modbusclient.WriteResponse, error) {
+			return app.modbusClient.WriteMultipleCoils(modbusclient.WriteMultipleCoilsRequest{Device: device, Register: register, Values: body.Values})
+		}}, nil
 	})
 }
 
@@ -257,15 +264,19 @@ func (app *App) HandleModbusWriteCoils() http.Handler {
 //	@Failure		401		{string}	string						"Unauthorized"
 //	@Router			/devices/{device}/holding-registers/{address} [put]
 func (app *App) HandleModbusWriteHoldingRegisters() http.Handler {
-	return app.handleWrite(func(device string, register uint16, r *http.Request) (modbusclient.WriteResponse, error) {
+	return app.handleWrite(func(device string, register uint16, r *http.Request) (writeCall, error) {
 		var body ModbusWriteRegistersRequest
 		if err := decodeWriteBody(r, &body, func() (bool, bool) { return body.Value != nil, body.Values != nil }); err != nil {
-			return modbusclient.WriteResponse{}, err
+			return writeCall{}, err
 		}
 		if body.Value != nil {
-			return app.modbusClient.WriteSingleRegister(modbusclient.WriteSingleRegisterRequest{Device: device, Register: register, Value: *body.Value})
+			return writeCall{fc: 6, qty: 1, do: func() (modbusclient.WriteResponse, error) {
+				return app.modbusClient.WriteSingleRegister(modbusclient.WriteSingleRegisterRequest{Device: device, Register: register, Value: *body.Value})
+			}}, nil
 		}
-		return app.modbusClient.WriteMultipleRegisters(modbusclient.WriteMultipleRegistersRequest{Device: device, Register: register, Values: body.Values})
+		return writeCall{fc: 16, qty: uint16(len(body.Values)), do: func() (modbusclient.WriteResponse, error) {
+			return app.modbusClient.WriteMultipleRegisters(modbusclient.WriteMultipleRegistersRequest{Device: device, Register: register, Values: body.Values})
+		}}, nil
 	})
 }
 
@@ -305,8 +316,9 @@ func parseModbusUint16(value string) (uint16, error) {
 	return uint16(parsed), nil
 }
 
-func (app *App) handleReadBits(read func(modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error)) http.Handler {
+func (app *App) handleReadBits(fc uint8, read func(modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		if app.modbusClient == nil {
 			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
 			return
@@ -329,6 +341,7 @@ func (app *App) handleReadBits(read func(modbusclient.ReadBitsRequest) (modbuscl
 			Register: register,
 			Length:   length,
 		})
+		app.recordREST(r, device, fc, register, length, err, resp.Cached, start)
 		if err != nil {
 			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
 			return
@@ -338,8 +351,9 @@ func (app *App) handleReadBits(read func(modbusclient.ReadBitsRequest) (modbuscl
 	})
 }
 
-func (app *App) handleReadRegisters(read func(modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error)) http.Handler {
+func (app *App) handleReadRegisters(fc uint8, read func(modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		if app.modbusClient == nil {
 			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
 			return
@@ -362,6 +376,7 @@ func (app *App) handleReadRegisters(read func(modbusclient.ReadRegistersRequest)
 			Register: register,
 			Length:   length,
 		})
+		app.recordREST(r, device, fc, register, length, err, resp.Cached, start)
 		if err != nil {
 			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
 			return
@@ -371,24 +386,30 @@ func (app *App) handleReadRegisters(read func(modbusclient.ReadRegistersRequest)
 	})
 }
 
-// requestError is a problem with the request itself; the handler answers 400.
-type requestError struct{ error }
-
 // decodeWriteBody decodes a write body into dst; set reports afterwards whether value and values
 // are present, and exactly one of them must be.
 func decodeWriteBody(r *http.Request, dst any, set func() (value, values bool)) error {
 	if err := decodeJSONBody(r, dst); err != nil {
-		return requestError{err}
+		return err
 	}
 	if value, values := set(); value == values {
-		return requestError{ErrValueXorValues}
+		return ErrValueXorValues
 	}
 	return nil
 }
 
-// handleWrite parses device and address from the path and answers with the result of write.
-func (app *App) handleWrite(write func(device string, register uint16, r *http.Request) (modbusclient.WriteResponse, error)) http.Handler {
+// writeCall is a decoded write: its function code, the number of values and the call itself.
+type writeCall struct {
+	fc  uint8
+	qty uint16
+	do  func() (modbusclient.WriteResponse, error)
+}
+
+// handleWrite parses device and address from the path, lets decode turn the body into a call
+// and answers with its result.
+func (app *App) handleWrite(decode func(device string, register uint16, r *http.Request) (writeCall, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		if app.modbusClient == nil {
 			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
 			return
@@ -399,18 +420,41 @@ func (app *App) handleWrite(write func(device string, register uint16, r *http.R
 			return
 		}
 
-		resp, err := write(device, register, r)
+		call, err := decode(device, register, r)
 		if err != nil {
-			status := statusForModbusError(err)
-			if errors.As(err, new(requestError)) {
-				status = http.StatusBadRequest
-			}
-			web.Encode(w, status, ModbusErrorResponse{Error: err.Error()})
+			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
+			return
+		}
+		resp, err := call.do()
+		app.recordREST(r, device, call.fc, register, call.qty, err, false, start)
+		if err != nil {
+			web.Encode(w, statusForModbusError(err), ModbusErrorResponse{Error: err.Error()})
 			return
 		}
 
 		web.Encode(w, http.StatusOK, resp)
 	})
+}
+
+// recordREST adds a call of a Modbus endpoint to the activity. Calls for devices that are not
+// configured are left out: their name is whatever the caller typed.
+func (app *App) recordREST(r *http.Request, device string, fc uint8, addr, qty uint16, err error, cached bool, start time.Time) {
+	if app.activity == nil || errors.Is(err, modbusmanager.ErrDeviceNotConfigured) {
+		return
+	}
+	result, class := modbusmanager.Outcome(err, cached)
+	app.activity.Record(activity.Transaction{
+		Time: start, Source: activity.SourceREST, Client: clientIP(r), Device: device, Function: fc,
+		Address: addr, Quantity: qty, Result: result, Class: string(class), Duration: time.Since(start),
+	})
+}
+
+// clientIP is the IP address of the caller, without the port.
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func parseDeviceRegisterPath(w http.ResponseWriter, r *http.Request) (string, uint16, bool) {
@@ -455,19 +499,10 @@ func decodeJSONBody(r *http.Request, dst any) error {
 	return nil
 }
 
-func isValidationError(err error) bool {
-	return errors.Is(err, modbusmanager.ErrLengthMustBeGreaterThanZero) ||
-		errors.Is(err, modbusmanager.ErrLengthExceedsBitLimit) ||
-		errors.Is(err, modbusmanager.ErrLengthExceedsRegisterLimit) ||
-		errors.Is(err, modbusmanager.ErrValuesEmpty) ||
-		errors.Is(err, modbusmanager.ErrValuesExceedCoilLimit) ||
-		errors.Is(err, modbusmanager.ErrValuesExceedRegisterLimit)
-}
-
 // statusForModbusError maps a manager error to the HTTP status of the response.
 func statusForModbusError(err error) int {
 	switch {
-	case isValidationError(err):
+	case modbusmanager.IsValidationError(err):
 		return http.StatusBadRequest
 	case errors.Is(err, modbusmanager.ErrDeviceNotConfigured):
 		return http.StatusNotFound

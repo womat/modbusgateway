@@ -27,9 +27,11 @@ The config file path can also be set via the environment variable `CONFIG_FILE`;
 
 | Method | Path                                              | Auth    | Description                      |
 |--------|---------------------------------------------------|---------|----------------------------------|
+| GET    | `/`                                               | –       | Web page (asks for the API key)  |
 | GET    | `/version`                                        | –       | App name and version             |
 | GET    | `/health`                                         | API Key | Runtime health metrics           |
 | GET    | `/devices`, `/devices/{device}/status`            | API Key | Device, bus, queue and cache     |
+| GET    | `/activity`                                       | API Key | Clients, buses, last transactions|
 | GET    | `/devices/{device}/{table}/{address}?quantity=N`  | API Key | Read (FC1-FC4)                   |
 | PUT    | `/devices/{device}/{table}/{address}`             | API Key | Write (FC5, FC6, FC15, FC16)     |
 

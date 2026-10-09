@@ -29,6 +29,15 @@ makes the devices usable from everywhere on your network:
 
 No cloud, no database, no runtime: a single binary, configured with one YAML file.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/web-ui-dark.png">
+  <img src="docs/images/web-ui-light.png" alt="The modbusgateway web page: REST, Modbus TCP and Modbus RTU clients on the left, the gateway, the rs485 and smartfox-lan buses with their devices on the right, and the live protocol of the last transactions" width="800">
+</picture>
+
+*The built-in [web page](#web-page) (sample data).*
+
+---
+
 ## Features
 
 - **REST API** (HTTPS, API key, IP allowlist/blocklist) for FC1-FC6, FC15 and FC16
@@ -43,6 +52,8 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 - **Several devices per bus**, unit IDs on the listeners independent of the addresses on the bus
 - An **exception** of a device is passed on unchanged and keeps the connection; a transport error
   reconnects and retries once
+- **Web page** that shows who talks to the gateway: the clients per listener, the buses with their
+  devices, and a live protocol of the last transactions - no register values, embedded in the binary
 - **Hot reload** of the configuration via `SIGHUP`
 - Optional **Swagger UI** (build tag `swagger`, dev only)
 
@@ -218,10 +229,12 @@ a logger can poll the same meter without disturbing each other.
 
 | Method | Path                                                       | Auth    | Description                               |
 |--------|------------------------------------------------------------|---------|-------------------------------------------|
+| GET    | `/`                                                        | —       | [Web page](#web-page); it asks for the API key and reads the endpoints below |
 | GET    | `/version`                                                 | —       | Application name and version              |
 | GET    | `/health`                                                  | API key | Runtime health information                |
 | GET    | `/devices`                                                 | API key | Status of all configured devices          |
 | GET    | `/devices/{device}/status`                                 | API key | Status of one configured device           |
+| GET    | `/activity`                                                | API key | Listeners, clients, buses and the last 100 transactions |
 | GET    | `/devices/{device}/coils/{address}?quantity=N`             | API key | Read coils (`FC1`)                        |
 | GET    | `/devices/{device}/discrete-inputs/{address}?quantity=N`   | API key | Read discrete inputs (`FC2`)              |
 | GET    | `/devices/{device}/holding-registers/{address}?quantity=N` | API key | Read holding registers (`FC3`)            |
@@ -266,8 +279,16 @@ Errors are returned as `{"error": "..."}`:
 | 504    | the request waited longer than 10 s in the queue           |
 
 `/devices/{device}/status` reports the bus, the allowed `functions`, whether the bus connection is
-open, the last error and success, the requests waiting on the bus (`queueLen`) and the cache counters
-(`cacheHits`, `cacheMisses`).
+open, the last success and the last error (`lastError` and `lastErrorAt` stay until the next error;
+compare with `lastSuccessAt`), the requests waiting on the bus (`queueLen`), the cache (`cacheTTL` in
+seconds, `cacheHits`, `cacheMisses`) and, for a device offered on a Modbus listener, `gateway` with
+the listener and the unit ID there.
+
+`/activity` is what the web page draws: the listeners (`openConnections` for Modbus TCP), the
+clients of the last 10 minutes with their requests per minute, errors and the devices they asked,
+the buses with their transactions, errors, timeouts and mean duration, and the last 100
+transactions with source, client, device, function code, address, quantity, result and duration. It
+never holds register values.
 
 ```sh
 curl -k -H "X-Api-Key: your-api-key" https://my-pi:8443/devices
@@ -283,6 +304,32 @@ curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" 
 curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
   -d '{"values":[true,false,true,true]}' https://my-pi:8443/devices/heatpump/coils/0x14        # FC15
 ```
+
+---
+
+## Web page
+
+`https://<your-pi>:8443/` shows who talks to the gateway and refreshes every 2 seconds:
+
+- **Listeners and clients**: one group per listener - REST, Modbus TCP, Modbus RTU - with its
+  clients by IP address, their requests per minute, error share and the devices they asked. A
+  client stays listed until 10 minutes after its last Modbus request, at most 8 per listener; REST
+  counts calls of `/devices/…` only. The Modbus RTU listener is a fixed line and always shown; a
+  serial line carries no client address, so its row names the devices asked.
+- **Gateway, buses and devices**: every listener feeds the gateway, which queues each request on
+  the bus of the addressed device. A bus shows its transactions per second, mean duration, timeouts
+  and the waiting requests; each device hangs on the bus with its own tap. Every LED flashes once per
+  request; a tap turns red after an error of its device.
+- **Live protocol** (fold-out): the last 100 transactions - who asked which device for which
+  function code and range, the result (`ok`, `cache`, an exception of the device, `timeout`,
+  `forbidden`, ...) and the duration. Never the values.
+- **Filters**: click a client, a bus, a device or a function code; the filters combine. Above the
+  protocol, *FC* picks reads or writes and *Result* bus transactions, cache hits or errors.
+- The state in the header names what is wrong: `All devices OK`, `heatpump: 3 timeouts`, or
+  `rs485 disconnected`.
+
+The page is part of the binary and loads nothing from the internet. It asks for the API key once and
+keeps it in the browser (`localStorage`).
 
 ---
 
@@ -478,7 +525,9 @@ Modbus listeners:
 
 An old configuration file is refused with a message that names the new key. The read paths stay
 the same; reads gain `values` and `cached`, and the device status gains `bus`, `functions`,
-`queueLen` and the cache counters. Release 1.0.10 and earlier (`mbgw`, `/readholdingregisters`) have a different API.
+`queueLen`, the cache (`cacheTTL`, `cacheHits`, `cacheMisses`), `lastErrorAt` and `gateway`;
+`lastError` now stays until the next error instead of clearing on success. New: the web page at `/`
+and `GET /activity`. Release 1.0.10 and earlier (`mbgw`, `/readholdingregisters`) have a different API.
 
 ---
 

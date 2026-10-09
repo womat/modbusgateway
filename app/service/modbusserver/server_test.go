@@ -14,6 +14,7 @@ import (
 
 	simonmodbus "github.com/simonvetter/modbus"
 	"github.com/womat/mbserver"
+	"github.com/womat/modbusgateway/pkg/activity"
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
@@ -46,6 +47,13 @@ func downstream(t *testing.T) (*mbserver.Server, int) {
 // "rw" (all function codes) as unit 11 and "ro" (FC3 only) as unit 12.
 func gateway(t *testing.T, devicePort int) *simonmodbus.ModbusClient {
 	t.Helper()
+	client, _ := startGateway(t, devicePort, nil)
+	return client
+}
+
+// startGateway is gateway with the activity recorded in recorder; it also returns the server.
+func startGateway(t *testing.T, devicePort int, recorder *activity.Recorder) (*simonmodbus.ModbusClient, *Server) {
+	t.Helper()
 	m := modbusmanager.New()
 	t.Cleanup(func() { _ = m.Close() })
 	// Two buses to the same device: on one bus a unit id belongs to one device, and the test
@@ -68,7 +76,7 @@ func gateway(t *testing.T, devicePort int) *simonmodbus.ModbusClient {
 	}
 
 	port := freePort(t)
-	server := New(Listener{TCP: &TCPListener{Host: "127.0.0.1", Port: port}}, m, map[uint8]string{11: "rw", 12: "ro"})
+	server := New(Listener{TCP: &TCPListener{Host: "127.0.0.1", Port: port}}, m, map[uint8]string{11: "rw", 12: "ro"}, recorder)
 	if err := server.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +92,40 @@ func gateway(t *testing.T, devicePort int) *simonmodbus.ModbusClient {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
-	return client
+	return client, server
+}
+
+// TestGatewayRecordsActivity: every request lands in the activity with the client address, the
+// unit ID it used and its outcome; the open connection is listed.
+func TestGatewayRecordsActivity(t *testing.T) {
+	_, port := downstream(t)
+	recorder := activity.New()
+	client, server := startGateway(t, port, recorder)
+
+	_ = client.SetUnitId(11)
+	if _, err := client.ReadRegisters(100, 2, simonmodbus.HOLDING_REGISTER); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.SetUnitId(12)
+	_ = client.WriteRegister(5, 1) // ro allows FC3 only
+
+	recent := recorder.Recent()
+	if len(recent) != 2 {
+		t.Fatalf("recorded %d transactions, want 2: %+v", len(recent), recent)
+	}
+	write, read := recent[0], recent[1]
+	if read.Source != activity.SourceTCP || read.Client != "127.0.0.1" || read.Device != "rw" || read.UnitId != 11 ||
+		read.Function != 3 || read.Address != 100 || read.Quantity != 2 || read.Result != "ok" || read.Class != "ok" {
+		t.Errorf("read recorded as %+v", read)
+	}
+	if write.Device != "ro" || write.UnitId != 12 || write.Function != 6 || write.Result != "forbidden" || write.Class != "rejected" {
+		t.Errorf("refused write recorded as %+v", write)
+	}
+
+	conns := server.Connections()
+	if len(conns) != 1 || conns[0].Remote != "127.0.0.1" || conns[0].Requests != 2 {
+		t.Errorf("Connections() = %+v, want one connection from 127.0.0.1 with 2 requests", conns)
+	}
 }
 
 func TestGatewayReads(t *testing.T) {

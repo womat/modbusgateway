@@ -1,4 +1,99 @@
 definitions:
+  app.ActivityResponse:
+    properties:
+      buses:
+        items:
+          $ref: '#/definitions/app.BusActivity'
+        type: array
+      clients:
+        description: the most recent first
+        items:
+          $ref: '#/definitions/app.ClientActivity'
+        type: array
+      listeners:
+        items:
+          $ref: '#/definitions/app.ListenerActivity'
+        type: array
+      recent:
+        description: the last 100, newest first
+        items:
+          $ref: '#/definitions/app.TransactionActivity'
+        type: array
+    type: object
+  app.BusActivity:
+    properties:
+      address:
+        description: host:port, or the serial port with its line settings
+        type: string
+      connected:
+        type: boolean
+      errors:
+        type: integer
+      lastConnectAt:
+        type: string
+      meanDuration:
+        description: seconds per transaction
+        type: number
+      name:
+        type: string
+      queueLen:
+        type: integer
+      queueSize:
+        type: integer
+      timeouts:
+        type: integer
+      transactions:
+        description: since the start
+        type: integer
+      type:
+        description: tcp | rtu
+        type: string
+    type: object
+  app.ClientActivity:
+    properties:
+      address:
+        type: string
+      connected:
+        description: 'tcp: a connection is open'
+        type: boolean
+      connectedSince:
+        description: 'tcp: the oldest open connection'
+        type: string
+      errors:
+        description: timeouts, exceptions and refused requests
+        type: integer
+      firstAt:
+        type: string
+      lastAt:
+        type: string
+      perMinute:
+        description: requests in the last 60 s
+        type: integer
+      requests:
+        type: integer
+      source:
+        description: rest | tcp | rtu
+        type: string
+      targets:
+        items:
+          $ref: '#/definitions/app.TargetActivity'
+        type: array
+    type: object
+  app.ListenerActivity:
+    properties:
+      address:
+        description: host:port, or the serial port
+        type: string
+      openConnections:
+        description: 'tcp: open connections, silent ones included'
+        type: integer
+      settings:
+        description: 'rtu: line settings, e.g. 9600 8N1'
+        type: string
+      source:
+        description: rest | tcp | rtu
+        type: string
+    type: object
   app.ModbusErrorResponse:
     properties:
       error:
@@ -23,6 +118,43 @@ definitions:
         items:
           type: integer
         type: array
+    type: object
+  app.TargetActivity:
+    properties:
+      device:
+        type: string
+      unitId:
+        type: integer
+    type: object
+  app.TransactionActivity:
+    properties:
+      address:
+        type: integer
+      class:
+        description: ok | cache | exception | timeout | error | rejected
+        type: string
+      client:
+        description: IP address; empty for the serial line
+        type: string
+      device:
+        type: string
+      duration:
+        type: number
+      functionCode:
+        type: integer
+      quantity:
+        type: integer
+      result:
+        description: ok, cache, timeout, forbidden, the exception of the device, ...
+        type: string
+      source:
+        description: rest | tcp | rtu
+        type: string
+      time:
+        type: string
+      unitId:
+        description: the unit ID used on a Modbus listener
+        type: integer
     type: object
   health.Model:
     properties:
@@ -65,6 +197,9 @@ definitions:
         type: integer
       cacheMisses:
         type: integer
+      cacheTTL:
+        description: seconds a read stays in the cache; 0 = no cache
+        type: number
       connected:
         description: the bus connection is open
         type: boolean
@@ -77,9 +212,16 @@ definitions:
         items:
           type: string
         type: array
+      gateway:
+        allOf:
+        - $ref: '#/definitions/modbusclient.Gateway'
+        description: the Modbus listener that offers the device
       lastConnectAt:
         type: string
       lastError:
+        type: string
+      lastErrorAt:
+        description: lastError stays until the next error
         type: string
       lastRequestAt:
         type: string
@@ -91,6 +233,15 @@ definitions:
       transport:
         type: string
       unitId:
+        type: integer
+    type: object
+  modbusclient.Gateway:
+    properties:
+      listener:
+        description: tcp | rtu
+        type: string
+      unitId:
+        description: the unit ID on that listener
         type: integer
     type: object
   modbusclient.ReadBitsResponse:
@@ -177,6 +328,27 @@ definitions:
 info:
   contact: {}
 paths:
+  /activity:
+    get:
+      description: Returns the listeners, the clients of the last 10 min (REST callers
+        of /devices/…, Modbus TCP connections, the Modbus RTU line), the buses and
+        the last 100 transactions. No register values.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity
+          schema:
+            $ref: '#/definitions/app.ActivityResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      security:
+      - ApiKeyAuth: []
+      summary: Get the communication activity
+      tags:
+      - info
   /devices:
     get:
       description: Returns the current connection and health status for all configured

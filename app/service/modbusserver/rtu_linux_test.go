@@ -58,7 +58,7 @@ func TestRTUListener(t *testing.T) {
 	}
 
 	server := New(Listener{RTU: &RTUListener{Port: gatewayPort, BaudRate: 115200, DataBits: 8, Parity: "N", StopBits: 1}},
-		m, map[uint8]string{31: "pv"})
+		m, map[uint8]string{31: "pv"}, nil)
 	if err := server.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}

@@ -19,6 +19,9 @@ Pi an dieser Leitung und macht die Geräte im ganzen Heimnetz nutzbar:
   serielle Leitung sieht eine Anfrage nach der anderen, Schreibbefehle zuerst und in Reihenfolge;
   Leseanfragen kommen aus einem **kurzlebigen Cache**, gleiche Anfragen teilen sich einen Buszugriff.
 
+Eine eingebaute **Webseite** zeigt, wer mit dem Gateway spricht: die Clients je Eingang, die Busse
+mit ihren Geräten und ein Live-Protokoll der letzten Anfragen – ohne Registerwerte.
+
 Pro Gerät legt `functions` fest, welche Function Codes erlaubt sind (`FC1`–`FC6`, `FC15`, `FC16`) –
 ohne Angabe nur lesen. Keine Cloud, keine Datenbank: ein einzelnes Programm und eine YAML-Datei.
 

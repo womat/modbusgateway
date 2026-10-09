@@ -24,6 +24,7 @@ import (
 
 	modbusclientservice "github.com/womat/modbusgateway/app/service/modbusclient"
 	modbusserverservice "github.com/womat/modbusgateway/app/service/modbusserver"
+	"github.com/womat/modbusgateway/pkg/activity"
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
@@ -51,11 +52,12 @@ type App struct {
 	modbusClient  *modbusclientservice.Service
 	modbusMgr     *modbusmanager.Manager
 	modbusServers []*modbusserverservice.Server
-	signals       <-chan os.Signal // OS signals, subscribed once by the caller for all lifecycles
-	checkReload   func() error     // loads and validates the config file before a SIGHUP restart
-	serverErr     chan error       // reports a web server that stopped on its own
-	restart       chan struct{}    // signals application restart
-	shutdown      chan struct{}    // signals application shutdown
+	activity      *activity.Recorder // who talks to the gateway, for the web page
+	signals       <-chan os.Signal   // OS signals, subscribed once by the caller for all lifecycles
+	checkReload   func() error       // loads and validates the config file before a SIGHUP restart
+	serverErr     chan error         // reports a web server that stopped on its own
+	restart       chan struct{}      // signals application restart
+	shutdown      chan struct{}      // signals application shutdown
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
 
@@ -132,8 +134,9 @@ func (app *App) Init() (err error) {
 			return fmt.Errorf("register modbus device %q: %w", name, err)
 		}
 	}
-	app.modbusClient = modbusclientservice.New(app.modbusMgr)
+	app.activity = activity.New()
 
+	gateways := map[string]modbusclientservice.Gateway{}
 	for _, listener := range []string{"tcp", "rtu"} {
 		if !app.config.listenerActive(listener) {
 			continue
@@ -143,9 +146,13 @@ func (app *App) Init() (err error) {
 			_ = app.modbusMgr.Close()
 			return err
 		}
+		for unitId, name := range devices {
+			gateways[name] = modbusclientservice.Gateway{Listener: listener, UnitId: unitId}
+		}
 		app.modbusServers = append(app.modbusServers,
-			modbusserverservice.New(mapListener(listener, app.config.Listen), app.modbusMgr, devices))
+			modbusserverservice.New(mapListener(listener, app.config.Listen), app.modbusMgr, devices, app.activity))
 	}
+	app.modbusClient = modbusclientservice.New(app.modbusMgr, gateways)
 
 	// initRoutes should always be called at the end
 	slog.Debug("Initializing API routes")

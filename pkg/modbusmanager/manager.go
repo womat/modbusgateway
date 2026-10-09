@@ -31,6 +31,7 @@ var (
 	ErrUnitIdInUse             = errors.New("unit id is already used on this bus")
 	ErrFunctionNotAllowed      = errors.New("function code is not allowed for this device")
 	ErrUnsupportedFunction     = errors.New("unsupported function code")
+	ErrInvalidRequest          = errors.New("malformed request") // for callers that decode requests themselves
 )
 
 // DefaultFunctions are the function codes a device allows when its configuration names none:
@@ -66,6 +67,23 @@ type DeviceStatus struct {
 	QueueLen      int // requests waiting on the bus
 	CacheHits     uint64
 	CacheMisses   uint64
+	CacheTTL      time.Duration // 0 = no cache
+	LastErrorAt   time.Time     // LastError stays until the next error; compare with LastSuccessAt
+}
+
+// BusStatus reports one bus: its connection, its queue and the transactions that reached it.
+type BusStatus struct {
+	Name          string
+	Type          string // tcp | rtu
+	Address       string // host:port, or the serial port with its line settings
+	Connected     bool
+	LastConnectAt time.Time
+	QueueLen      int // requests waiting
+	QueueSize     int
+	Transactions  uint64        // requests executed on the bus since the start
+	Errors        uint64        // of them failed: exceptions, timeouts, connection failures
+	Timeouts      uint64        // of them the device did not answer in time
+	BusyTime      time.Duration // time the bus spent on them; BusyTime/Transactions is the mean
 }
 
 // Manager owns the buses and the devices on them.
@@ -83,6 +101,7 @@ type device struct {
 
 	mu            sync.Mutex
 	lastError     string
+	lastErrorAt   time.Time
 	lastSuccessAt time.Time
 	lastRequestAt time.Time
 
@@ -229,6 +248,24 @@ func (m *Manager) ListStatus() []DeviceStatus {
 	return statuses
 }
 
+// BusStatus returns the status of all registered buses, sorted by name.
+func (m *Manager) BusStatus() []BusStatus {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	names := make([]string, 0, len(m.buses))
+	for name := range m.buses {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	statuses := make([]BusStatus, 0, len(names))
+	for _, name := range names {
+		statuses = append(statuses, m.buses[name].status())
+	}
+	return statuses
+}
+
 // Close stops the workers and closes all bus connections. Requests still waiting fail with
 // ErrManagerClosed.
 func (m *Manager) Close() error {
@@ -293,9 +330,9 @@ func (d *device) record(err error, read, cached bool) {
 	d.lastRequestAt = now
 	if err != nil {
 		d.lastError = err.Error()
+		d.lastErrorAt = now
 		return
 	}
-	d.lastError = ""
 	d.lastSuccessAt = now
 }
 
@@ -319,5 +356,7 @@ func (d *device) status() DeviceStatus {
 		QueueLen:      d.bus.queueLen(),
 		CacheHits:     d.cacheHits.Load(),
 		CacheMisses:   d.cacheMisses.Load(),
+		CacheTTL:      d.cfg.CacheTTL,
+		LastErrorAt:   d.lastErrorAt,
 	}
 }

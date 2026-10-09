@@ -19,6 +19,7 @@ import (
 
 	simonmodbus "github.com/simonvetter/modbus"
 	"github.com/womat/mbserver"
+	"github.com/womat/modbusgateway/pkg/activity"
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
@@ -66,16 +67,58 @@ func (l Listener) String() string {
 type Server struct {
 	listener Listener
 	manager  *modbusmanager.Manager
-	devices  map[uint8]string // unit ID on this listener -> device name
+	devices  map[uint8]string   // unit ID on this listener -> device name
+	recorder *activity.Recorder // may be nil
 
 	mu     sync.Mutex
 	server *mbserver.Server
 	cancel context.CancelFunc
 }
 
-// New creates a server; devices maps the unit IDs of this listener to device names.
-func New(listener Listener, manager *modbusmanager.Manager, devices map[uint8]string) *Server {
-	return &Server{listener: listener, manager: manager, devices: devices}
+// New creates a server; devices maps the unit IDs of this listener to device names. Every request
+// is recorded in recorder, which may be nil.
+func New(listener Listener, manager *modbusmanager.Manager, devices map[uint8]string, recorder *activity.Recorder) *Server {
+	return &Server{listener: listener, manager: manager, devices: devices, recorder: recorder}
+}
+
+// Connection is an open Modbus TCP connection.
+type Connection struct {
+	Remote   string // IP address of the client
+	Since    time.Time
+	Requests uint64 // answered requests
+}
+
+// Connections returns the open Modbus TCP connections, the oldest first; none for an RTU
+// listener or a server that is not running.
+func (s *Server) Connections() []Connection {
+	s.mu.Lock()
+	server := s.server
+	s.mu.Unlock()
+	if server == nil || s.listener.TCP == nil {
+		return nil
+	}
+	clients := server.Clients()
+	list := make([]Connection, 0, len(clients))
+	for _, c := range clients {
+		list = append(list, Connection{Remote: hostOf(c.Remote), Since: c.Since, Requests: c.Requests})
+	}
+	return list
+}
+
+// Listener returns where the server accepts requests.
+func (s *Server) Listener() Listener {
+	return s.listener
+}
+
+// hostOf is the IP address of addr without the port.
+func hostOf(addr net.Addr) string {
+	if addr == nil {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(addr.String()); err == nil {
+		return host
+	}
+	return addr.String()
 }
 
 // Start begins accepting requests.
@@ -106,7 +149,11 @@ func (s *Server) Start(ctx context.Context) error {
 			return fmt.Errorf("unit id %d: %w", id, err)
 		}
 	}
-	h := &handler{manager: s.manager, devices: s.devices}
+	source := activity.SourceTCP
+	if s.listener.RTU != nil {
+		source = activity.SourceRTU
+	}
+	h := &handler{manager: s.manager, devices: s.devices, recorder: s.recorder, source: source}
 	server.RegisterFunctionHandler(1, h.readCoils)
 	server.RegisterFunctionHandler(2, h.readDiscreteInputs)
 	server.RegisterFunctionHandler(3, h.readHoldingRegisters)
@@ -196,8 +243,27 @@ func serialConfig(l RTUListener) (mbserver.SerialConfig, error) {
 
 // handler forwards the requests of one listener to the manager.
 type handler struct {
-	manager *modbusmanager.Manager
-	devices map[uint8]string
+	manager  *modbusmanager.Manager
+	devices  map[uint8]string
+	recorder *activity.Recorder
+	source   activity.Source
+}
+
+// record adds the request to the activity: who sent it, which device and range it asked for,
+// and how it ended.
+func (h *handler) record(frame mbserver.Framer, device string, addr, qty uint16, err error, cached bool, start time.Time) {
+	if h.recorder == nil {
+		return
+	}
+	result, class := modbusmanager.Outcome(err, cached)
+	t := activity.Transaction{
+		Time: start, Source: h.source, Device: device, UnitId: frame.GetUnitId(), Function: frame.GetFunction(),
+		Address: addr, Quantity: qty, Result: result, Class: string(class), Duration: time.Since(start),
+	}
+	if r, ok := frame.(interface{ RemoteAddr() net.Addr }); ok {
+		t.Client = hostOf(r.RemoteAddr())
+	}
+	h.recorder.Record(t)
 }
 
 // device returns the device of the request; mbserver only passes configured unit IDs on.
@@ -240,15 +306,18 @@ func (h *handler) readDiscreteInputs(_ *mbserver.Server, frame mbserver.Framer) 
 }
 
 func (h *handler) readBits(frame mbserver.Framer, read func(string, uint16, uint16) (modbusmanager.ReadBitsResult, error)) ([]byte, mbserver.Exception) {
+	start := time.Now()
 	name, ok := h.device(frame)
 	if !ok {
 		return nil, mbserver.GatewayPathUnavailable
 	}
 	addr, qty, ok := addressAndQuantity(frame)
 	if !ok {
+		h.record(frame, name, 0, 0, modbusmanager.ErrInvalidRequest, false, start)
 		return nil, mbserver.IllegalDataValue
 	}
 	result, err := read(name, addr, qty)
+	h.record(frame, name, addr, qty, err, result.Cached, start)
 	if err != nil {
 		return nil, exception(err)
 	}
@@ -264,15 +333,18 @@ func (h *handler) readInputRegisters(_ *mbserver.Server, frame mbserver.Framer) 
 }
 
 func (h *handler) readRegisters(frame mbserver.Framer, read func(string, uint16, uint16) (modbusmanager.ReadRegistersResult, error)) ([]byte, mbserver.Exception) {
+	start := time.Now()
 	name, ok := h.device(frame)
 	if !ok {
 		return nil, mbserver.GatewayPathUnavailable
 	}
 	addr, qty, ok := addressAndQuantity(frame)
 	if !ok {
+		h.record(frame, name, 0, 0, modbusmanager.ErrInvalidRequest, false, start)
 		return nil, mbserver.IllegalDataValue
 	}
 	result, err := read(name, addr, qty)
+	h.record(frame, name, addr, qty, err, result.Cached, start)
 	if err != nil {
 		return nil, exception(err)
 	}
@@ -280,15 +352,18 @@ func (h *handler) readRegisters(frame mbserver.Framer, read func(string, uint16,
 }
 
 func (h *handler) writeSingleCoil(_ *mbserver.Server, frame mbserver.Framer) ([]byte, mbserver.Exception) {
+	start := time.Now()
 	name, ok := h.device(frame)
 	if !ok {
 		return nil, mbserver.GatewayPathUnavailable
 	}
 	addr, value, ok := addressAndQuantity(frame)
 	if !ok || (value != 0xFF00 && value != 0x0000) {
+		h.record(frame, name, addr, 1, modbusmanager.ErrInvalidRequest, false, start)
 		return nil, mbserver.IllegalDataValue
 	}
 	result, err := h.manager.WriteSingleCoil(name, addr, value == 0xFF00)
+	h.record(frame, name, addr, 1, err, false, start)
 	if err != nil {
 		return nil, exception(err)
 	}
@@ -296,15 +371,18 @@ func (h *handler) writeSingleCoil(_ *mbserver.Server, frame mbserver.Framer) ([]
 }
 
 func (h *handler) writeSingleRegister(_ *mbserver.Server, frame mbserver.Framer) ([]byte, mbserver.Exception) {
+	start := time.Now()
 	name, ok := h.device(frame)
 	if !ok {
 		return nil, mbserver.GatewayPathUnavailable
 	}
 	addr, value, ok := addressAndQuantity(frame)
 	if !ok {
+		h.record(frame, name, 0, 0, modbusmanager.ErrInvalidRequest, false, start)
 		return nil, mbserver.IllegalDataValue
 	}
 	result, err := h.manager.WriteSingleRegister(name, addr, value)
+	h.record(frame, name, addr, 1, err, false, start)
 	if err != nil {
 		return nil, exception(err)
 	}
@@ -312,12 +390,14 @@ func (h *handler) writeSingleRegister(_ *mbserver.Server, frame mbserver.Framer)
 }
 
 func (h *handler) writeMultipleCoils(_ *mbserver.Server, frame mbserver.Framer) ([]byte, mbserver.Exception) {
+	start := time.Now()
 	name, ok := h.device(frame)
 	if !ok {
 		return nil, mbserver.GatewayPathUnavailable
 	}
 	addr, qty, payload, ok := multipleWrite(frame, func(qty uint16) int { return (int(qty) + 7) / 8 })
 	if !ok {
+		h.record(frame, name, addr, qty, modbusmanager.ErrInvalidRequest, false, start)
 		return nil, mbserver.IllegalDataValue
 	}
 	values := make([]bool, qty)
@@ -325,6 +405,7 @@ func (h *handler) writeMultipleCoils(_ *mbserver.Server, frame mbserver.Framer) 
 		values[i] = payload[i/8]&(1<<(uint(i)%8)) != 0
 	}
 	result, err := h.manager.WriteMultipleCoils(name, addr, values)
+	h.record(frame, name, addr, qty, err, false, start)
 	if err != nil {
 		return nil, exception(err)
 	}
@@ -332,12 +413,14 @@ func (h *handler) writeMultipleCoils(_ *mbserver.Server, frame mbserver.Framer) 
 }
 
 func (h *handler) writeMultipleRegisters(_ *mbserver.Server, frame mbserver.Framer) ([]byte, mbserver.Exception) {
+	start := time.Now()
 	name, ok := h.device(frame)
 	if !ok {
 		return nil, mbserver.GatewayPathUnavailable
 	}
 	addr, qty, payload, ok := multipleWrite(frame, func(qty uint16) int { return int(qty) * 2 })
 	if !ok {
+		h.record(frame, name, addr, qty, modbusmanager.ErrInvalidRequest, false, start)
 		return nil, mbserver.IllegalDataValue
 	}
 	values := make([]uint16, qty)
@@ -345,6 +428,7 @@ func (h *handler) writeMultipleRegisters(_ *mbserver.Server, frame mbserver.Fram
 		values[i] = binary.BigEndian.Uint16(payload[i*2:])
 	}
 	result, err := h.manager.WriteMultipleRegisters(name, addr, values)
+	h.record(frame, name, addr, qty, err, false, start)
 	if err != nil {
 		return nil, exception(err)
 	}
@@ -372,12 +456,7 @@ func exception(err error) mbserver.Exception {
 	switch {
 	case errors.Is(err, modbusmanager.ErrFunctionNotAllowed):
 		return mbserver.IllegalFunction
-	case errors.Is(err, modbusmanager.ErrLengthMustBeGreaterThanZero),
-		errors.Is(err, modbusmanager.ErrLengthExceedsBitLimit),
-		errors.Is(err, modbusmanager.ErrLengthExceedsRegisterLimit),
-		errors.Is(err, modbusmanager.ErrValuesEmpty),
-		errors.Is(err, modbusmanager.ErrValuesExceedCoilLimit),
-		errors.Is(err, modbusmanager.ErrValuesExceedRegisterLimit):
+	case modbusmanager.IsValidationError(err):
 		return mbserver.IllegalDataValue
 	case errors.Is(err, modbusmanager.ErrDeviceNotConfigured):
 		return mbserver.GatewayPathUnavailable

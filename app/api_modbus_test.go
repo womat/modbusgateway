@@ -166,3 +166,51 @@ func TestRESTWriteBody(t *testing.T) {
 		t.Errorf("POST: %d, want 405", code)
 	}
 }
+
+// TestActivity: a REST call of a Modbus endpoint lands in /activity with the caller's address;
+// other API calls do not count.
+func TestActivity(t *testing.T) {
+	_, h := newTestApp(t)
+	request(t, h, http.MethodGet, "/devices/meter/holding-registers/16?quantity=2", "")
+	request(t, h, http.MethodPut, "/devices/meter/holding-registers/0", `{"value":1}`) // refused: read-only
+	request(t, h, http.MethodGet, "/devices/meter/status", "")
+	request(t, h, http.MethodGet, "/devices/nope/holding-registers/0", "") // unknown device: not recorded
+
+	code, resp := request(t, h, http.MethodGet, "/activity", "")
+	if code != http.StatusOK {
+		t.Fatalf("GET /activity: %d %v", code, resp)
+	}
+	recent := resp["recent"].([]any)
+	if len(recent) != 2 {
+		t.Fatalf("recent = %v, want the read and the refused write", recent)
+	}
+	write, read := recent[0].(map[string]any), recent[1].(map[string]any)
+	if read["source"] != "rest" || read["client"] != "127.0.0.1" || read["device"] != "meter" || read["functionCode"] != float64(3) ||
+		read["address"] != float64(16) || read["quantity"] != float64(2) || read["result"] != "ok" {
+		t.Errorf("read = %v", read)
+	}
+	if write["functionCode"] != float64(6) || write["result"] != "forbidden" || write["class"] != "rejected" {
+		t.Errorf("write = %v", write)
+	}
+
+	clients := resp["clients"].([]any)
+	if len(clients) != 1 {
+		t.Fatalf("clients = %v, want one REST client", clients)
+	}
+	if c := clients[0].(map[string]any); c["address"] != "127.0.0.1" || c["requests"] != float64(2) || c["errors"] != float64(1) || c["perMinute"] != float64(2) {
+		t.Errorf("client = %v, want 2 requests, 1 error", c)
+	}
+	buses := resp["buses"].([]any)
+	if b := buses[0].(map[string]any); len(buses) != 1 || b["name"] != "lan" || b["transactions"] != float64(1) {
+		t.Errorf("buses = %v, want lan with the one read", buses)
+	}
+	listeners := resp["listeners"].([]any)
+	if len(listeners) != 1 || listeners[0].(map[string]any)["source"] != "rest" {
+		t.Errorf("listeners = %v, want only the REST API", listeners)
+	}
+
+	_, status := request(t, h, http.MethodGet, "/devices/pump/status", "")
+	if status["cacheTTL"] != float64(60) || status["gateway"] != nil {
+		t.Errorf("status = %v, want cacheTTL 60 and no gateway (no listener)", status)
+	}
+}

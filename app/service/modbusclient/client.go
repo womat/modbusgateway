@@ -111,16 +111,27 @@ type DeviceStatusResponse struct {
 	QueueLen      int      `json:"queueLen"` // requests waiting on the bus
 	CacheHits     uint64   `json:"cacheHits"`
 	CacheMisses   uint64   `json:"cacheMisses"`
+	CacheTTL      float64  `json:"cacheTTL"`              // seconds a read stays in the cache; 0 = no cache
+	LastErrorAt   string   `json:"lastErrorAt,omitempty"` // lastError stays until the next error
+	Gateway       *Gateway `json:"gateway,omitempty"`     // the Modbus listener that offers the device
+}
+
+// Gateway is where a Modbus listener offers a device.
+type Gateway struct {
+	Listener string `json:"listener"` // tcp | rtu
+	UnitId   uint8  `json:"unitId"`   // the unit ID on that listener
 }
 
 // Service provides Modbus operations for the application layer.
 type Service struct {
-	manager *modbusmanager.Manager
+	manager  *modbusmanager.Manager
+	gateways map[string]Gateway // device name -> listener and unit ID
 }
 
-// New returns a new Modbus service instance.
-func New(manager *modbusmanager.Manager) *Service {
-	return &Service{manager: manager}
+// New returns a new Modbus service instance; gateways maps the devices offered on a Modbus
+// listener to that listener and their unit ID there.
+func New(manager *modbusmanager.Manager, gateways map[string]Gateway) *Service {
+	return &Service{manager: manager, gateways: gateways}
 }
 
 // ReadCoils validates the request shape and executes a Modbus FC1 read via the manager.
@@ -249,7 +260,7 @@ func (s *Service) GetDeviceStatus(name string) (DeviceStatusResponse, error) {
 		return DeviceStatusResponse{}, err
 	}
 
-	return mapStatus(status), nil
+	return s.mapStatus(status), nil
 }
 
 // ListDeviceStatus returns the current status for all configured devices.
@@ -261,7 +272,7 @@ func (s *Service) ListDeviceStatus() ([]DeviceStatusResponse, error) {
 	statuses := s.manager.ListStatus()
 	resp := make([]DeviceStatusResponse, 0, len(statuses))
 	for _, status := range statuses {
-		resp = append(resp, mapStatus(status))
+		resp = append(resp, s.mapStatus(status))
 	}
 
 	return resp, nil
@@ -385,13 +396,13 @@ func mapWriteResponse(device modbusmanager.DeviceStatus, duration time.Duration,
 	}
 }
 
-func mapStatus(status modbusmanager.DeviceStatus) DeviceStatusResponse {
+func (s *Service) mapStatus(status modbusmanager.DeviceStatus) DeviceStatusResponse {
 	functions := make([]string, 0, len(status.Functions))
 	for _, fc := range status.Functions {
 		functions = append(functions, fmt.Sprintf("FC%d", fc))
 	}
 
-	return DeviceStatusResponse{
+	resp := DeviceStatusResponse{
 		Device:        status.Name,
 		Description:   status.Description,
 		Bus:           status.Bus,
@@ -406,7 +417,13 @@ func mapStatus(status modbusmanager.DeviceStatus) DeviceStatusResponse {
 		QueueLen:      status.QueueLen,
 		CacheHits:     status.CacheHits,
 		CacheMisses:   status.CacheMisses,
+		CacheTTL:      status.CacheTTL.Seconds(),
+		LastErrorAt:   formatTime(status.LastErrorAt),
 	}
+	if g, ok := s.gateways[status.Name]; ok {
+		resp.Gateway = &g
+	}
+	return resp
 }
 
 func formatTime(t time.Time) string {

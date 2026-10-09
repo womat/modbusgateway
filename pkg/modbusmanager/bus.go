@@ -78,6 +78,14 @@ type busClient interface {
 	WriteRegisters(addr uint16, values []uint16) error
 }
 
+// busStats counts the transactions that reached the bus; guarded by bus.mu.
+type busStats struct {
+	transactions uint64        // requests executed on the bus, failed ones included
+	errors       uint64        // of them: exceptions, timeouts and connection failures
+	timeouts     uint64        // of them: the device did not answer in time
+	busy         time.Duration // time the bus spent on them
+}
+
 // job is one request on a bus. A nil op only opens the connection.
 type job struct {
 	unitId   uint8
@@ -107,11 +115,12 @@ type bus struct {
 	stop   chan struct{}
 	wg     sync.WaitGroup
 
-	mu            sync.Mutex // guards inflight, cache and the connection state
+	mu            sync.Mutex // guards inflight, cache, the connection state and stats
 	inflight      map[span]*job
 	cache         cache
 	connected     bool
 	lastConnectAt time.Time
+	stats         busStats
 
 	client busClient // used by the worker only
 }
@@ -243,7 +252,28 @@ func (b *bus) run() {
 				return
 			}
 		}
-		b.finish(j, b.execute(j))
+		start := time.Now()
+		result := b.execute(j)
+		b.count(j, result, time.Since(start))
+		b.finish(j, result)
+	}
+}
+
+// count adds a request that reached the bus to the stats; connect-only jobs and requests
+// dropped from the queue do not count.
+func (b *bus) count(j *job, result jobResult, took time.Duration) {
+	if j.op == nil || errors.Is(result.err, ErrQueueTimeout) {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.stats.transactions++
+	b.stats.busy += took
+	if result.err != nil {
+		b.stats.errors++
+		if IsTimeout(result.err) {
+			b.stats.timeouts++
+		}
 	}
 }
 
@@ -357,6 +387,37 @@ func (b *bus) connection() (connected bool, lastConnectAt time.Time) {
 
 func (b *bus) queueLen() int {
 	return len(b.writes) + len(b.reads)
+}
+
+func (b *bus) status() BusStatus {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s := BusStatus{
+		Name:          b.cfg.Name,
+		Type:          b.cfg.Type,
+		Address:       b.address(),
+		Connected:     b.connected,
+		LastConnectAt: b.lastConnectAt,
+		QueueLen:      len(b.writes) + len(b.reads),
+		QueueSize:     b.cfg.QueueSize,
+		Transactions:  b.stats.transactions,
+		Errors:        b.stats.errors,
+		Timeouts:      b.stats.timeouts,
+		BusyTime:      b.stats.busy,
+	}
+	return s
+}
+
+// address describes where the bus is: host:port, or the serial port with its line settings.
+func (b *bus) address() string {
+	switch {
+	case b.cfg.TCP != nil:
+		return net.JoinHostPort(b.cfg.TCP.Host, strconv.Itoa(b.cfg.TCP.Port))
+	case b.cfg.Serial != nil:
+		s := b.cfg.Serial
+		return fmt.Sprintf("%s %d %d%s%d", s.Port, s.BaudRate, s.DataBits, strings.ToUpper(s.Parity), s.StopBits)
+	}
+	return ""
 }
 
 // modbusExceptions are the errors simonvetter returns for an exception response.
