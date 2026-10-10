@@ -85,4 +85,4 @@ Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layer
 - No "master"/"slave" wording anywhere — use client/server. The Modbus address is `unitId` (Go `UnitId`), never `deviceId`.
 - Optional config blocks are switched on by their presence; there are no `enabled` flags.
 - Config field docs live in `README.md` (key table and example) and `config/config.yaml` — update both when adding a config key. `cmd/README.md` is the short `--help` text.
-- Commit subjects use the prefixes `feat()`, `fix()`, `docu()`, `chore()`, `refactor()`; the release changelog groups on them (`.goreleaser.yaml`).
+- Commit subjects follow Conventional Commits, `type(scope): description` with an optional scope (`fix: default port 8443`, `feat(ui): …`), types `feat`, `fix`, `docu`, `chore`, `refactor`. The release changelog groups on them (`.goreleaser.yaml`).
