@@ -1,0 +1,17 @@
+# golangci-lint configuration for github.com/womat/modbusgateway, run by
+# make lint and CI. The default linter set is kept. The exclusions below are
+# decisions, not convenience - each one says why, as in golib.
+#
+# Run it for the deployment target (make lint does): GOOS=linux brings in the
+# Linux-only RTU listener test, which a run on macOS would not see.
+
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      # Test code may ignore what it is not asserting on: a deferred Close of
+      # a listener or of the port a test keeps busy on purpose.
+      - path: _test\.go
+        linters:
+          - errcheck

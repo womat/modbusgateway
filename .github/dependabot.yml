@@ -1,8 +1,9 @@
 # Keeps the Go dependencies and the SHA-pinned GitHub Actions current.
 #
 # The workflows pin every action to a commit SHA with the release in a comment;
-# dependabot updates both together. govulncheck is installed with `go install`
-# in the workflows, which dependabot does not see - raise that pin by hand.
+# dependabot updates both together. govulncheck and golangci-lint are installed
+# with `go install` in the workflows and the Makefile, which dependabot does not
+# see - raise those pins by hand.
 
 version: 2
 

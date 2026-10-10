@@ -66,7 +66,7 @@ LDFLAGS := -X 'main.buildDate=$(BUILD_DATE)' \
            -X 'main.buildCommit=$(BUILD_COMMIT)' \
            -X 'github.com/womat/modbusgateway/app.VERSION=$(VERSION)'
 
-.PHONY: all test release deploy_release deploy deploy_dev clean help ensure_dev_certs
+.PHONY: all test lint release deploy_release deploy deploy_dev clean help ensure_dev_certs
 
 all: help
 
@@ -81,6 +81,25 @@ clean: ## Remove build related file
 # Linux; it is skipped elsewhere.
 test: ensure_dev_certs ## run all tests with the race detector
 	go test -race ./...
+
+# The analysers are pinned like in the workflows (dependabot does not see them) and
+# installed into ./bin/tools for this machine, then run against the deployment
+# target: GOOS=linux brings in the Linux-only RTU listener test, and `go run` with
+# a target GOOS/GOARCH would build a tool binary this machine cannot execute.
+# Both build variants are linted, with and without the Swagger UI.
+GOLANGCI_LINT_VERSION := v2.14.0
+GOVULNCHECK_VERSION   := v1.8.0
+TOOLS_BIN             := $(CURDIR)/bin/tools
+
+lint: ensure_dev_certs ## gofmt, go vet, golangci-lint and govulncheck, for the deployment target ($(PI_ARCH))
+	@test -z "$$(gofmt -l ./app ./cmd ./pkg)" || { echo "not gofmt'ed:"; gofmt -l ./app ./cmd ./pkg; exit 1; }
+	GOBIN=$(TOOLS_BIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	GOBIN=$(TOOLS_BIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	$(GOENV_$(PI_ARCH)) go vet ./...
+	$(GOENV_$(PI_ARCH)) go vet -tags swagger ./...
+	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/golangci-lint run ./...
+	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/golangci-lint run --build-tags swagger ./...
+	$(GOENV_$(PI_ARCH)) $(TOOLS_BIN)/govulncheck ./...
 
 ensure_dev_certs:
 	@mkdir -p $(DEV_CERT_DIR)

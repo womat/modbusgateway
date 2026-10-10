@@ -18,11 +18,14 @@ make build_arm7        # Pi 2/3/4/5, 32-bit OS
 make build_arm64       # Pi 3/4/5/400/Zero2, 64-bit OS
 make build_arm6_dev    # + Swagger UI (-tags swagger); _dev variants exist per arch
 make test              # go test -race ./...
+make lint              # gofmt, go vet, golangci-lint, govulncheck - for $(PI_ARCH), with and without -tags swagger
 make deploy            # build for $(PI_ARCH) then scp to $(PI_USER)@$(PI_HOST)
 make clean
 ```
 
-`ensure_dev_certs` (a prerequisite of every build target and of `make test`) generates `app/certs/dev_{cert,key}.pem` if missing; these are `//go:embed`-ed and gitignored, so a fresh clone must build via `make`, not bare `go build`. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
+`ensure_dev_certs` (a prerequisite of every build target, `make test` and `make lint`) generates `app/certs/dev_{cert,key}.pem` if missing; these are `//go:embed`-ed and gitignored, so a fresh clone must build via `make`, not bare `go build`. `VERSION` (`app/app.go`), `buildDate` and `buildCommit` (`cmd/main.go`) are `var`s injected via `-ldflags` — never edit them in source. The Makefile derives `VERSION` from `git describe --tags`; GoReleaser uses the tag itself.
+
+`make lint` installs the pinned golangci-lint and govulncheck into `bin/tools` for this machine and runs them for the deployment target (`GOOS=linux`): only then is the Linux-only RTU listener test linted, and `go run` under a target `GOOS`/`GOARCH` would build a binary the host cannot execute. `.golangci.yml` keeps the default linters; every exclusion there is a decision with a comment saying why (as in golib) — fix a finding rather than adding one, and when excluding, keep it narrow (an exact function under errcheck's `exclude-functions`, or a path + linter rule).
 
 Tests need no hardware: Modbus devices are emulated with an mbserver on a free local port, the bus worker is tested against a fake `busClient`. `TestRTUListener` (`app/service/modbusserver/rtu_linux_test.go`) runs the RTU listener over a socat pty pair; it is Linux-only and skipped without socat — on macOS: `docker run --rm -v "$PWD":/src -w /src golang:1.27 sh -c 'apt-get update -qq && apt-get install -y -qq socat && make test'`.
 
@@ -32,7 +35,7 @@ Tests need no hardware: Modbus devices are emulated with an mbserver on a free l
 
 Versioning is SemVer and the Git tag is the single source of truth. `.github/workflows/release.yml` runs `goreleaser release --clean`, which builds linux arm64/armv7/armv6 and publishes a GitHub release with checksums and a grouped changelog. `.goreleaser.yaml`'s `before` hook must keep running `make ensure_dev_certs` (GoReleaser calls `go build` directly), and archives must keep shipping `README.md` (third-party license overview) and `LICENSE` (MIT). When adding a dependency, update the license table in `README.md`.
 
-`.github/workflows/ci.yml` runs on every push/PR against `main`: a `test` job (native, with socat, `make test`) and a `build` matrix over armv6/armv7/arm64 that vets, builds (also `-tags swagger`) and runs govulncheck. All actions are pinned to a commit SHA with the release in a comment, `govulncheck` to a version; `.github/dependabot.yml` updates actions and Go modules weekly, but not the `go install` pins.
+`.github/workflows/ci.yml` runs on every push/PR against `main`: a `test` job (native, with socat, `make test`) and a `build` matrix over armv6/armv7/arm64 that vets, builds (also `-tags swagger`), runs golangci-lint (with and without `-tags swagger`) and govulncheck. All actions are pinned to a commit SHA with the release in a comment, `govulncheck` and `golangci-lint` to a version (in the workflows and the Makefile); `.github/dependabot.yml` updates actions and Go modules weekly, but not the `go install` pins.
 
 `PI_USER`/`PI_HOST`/`PI_PATH` default to placeholders; the actual device comes from environment variables or, project-specific, from `Makefile.local` (gitignored, pulled in via `-include`). Real host names, addresses and the production configuration stay out of this public repository. **`PI_ARCH` defaults to `arm6`**: it runs on every Pi in 32-bit mode, and a Pi Zero (1st gen) is ARMv6 only. `make deploy` is the development loop (binary reports a `-dirty` version), `make deploy_release TAG=vX.Y.Z` downloads, verifies and copies a published release.
 

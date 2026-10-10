@@ -1,4 +1,4 @@
-# Test, vet and build on every push and pull request.
+# Test, vet, lint and build on every push and pull request.
 #
 # Actions are pinned to a commit SHA, with the release it belongs to in a
 # comment; dependabot (.github/dependabot.yml) proposes updates.
@@ -87,6 +87,23 @@ jobs:
         # Pinned rather than @latest, so a new release cannot turn CI red without a
         # change here. dependabot does not see go install lines - raise it by hand.
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+      # golangci-lint with the default linters and the exclusions in .golangci.yml,
+      # installed for the runner like govulncheck and run for the matrix target, so
+      # the Linux-only RTU listener test is linted too. Both build variants, with
+      # and without the Swagger UI. Pinned like govulncheck; dependabot does not
+      # see it - raise it by hand.
+      - name: Install golangci-lint
+        env:
+          GOOS: ""
+          GOARCH: ""
+          GOARM: ""
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+
+      - name: golangci-lint
+        run: |
+          "$(go env GOPATH)/bin/golangci-lint" run ./...
+          "$(go env GOPATH)/bin/golangci-lint" run --build-tags swagger ./...
 
       # Exits non-zero when this code actually calls a vulnerable symbol.
       # Advisories that only sit in required modules are reported but do not
