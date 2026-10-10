@@ -505,7 +505,8 @@ the major version.
 `modbusgateway --version` reports the release a binary was built from. A local build reports
 something like `2.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
 
-Building from source needs Go and `make`: clone the repository and run `make help` for the targets;
+Building from source needs Go and `make`: clone the repository and run `make help` for the targets
+(`make test` and `make lint` together run what CI checks);
 [`CLAUDE.md`](CLAUDE.md) describes the architecture, the tests and the release process.
 
 ### Upgrading to 2.0.0

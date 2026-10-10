@@ -173,15 +173,13 @@ func (app *App) Start() error {
 
 	for _, server := range app.modbusServers {
 		if err := server.Start(app.ctx); err != nil {
-			app.closeModbusServers()
-			return fmt.Errorf("start modbus server: %w", err)
+			return errors.Join(fmt.Errorf("start modbus server: %w", err), app.closeModbusServers())
 		}
 	}
 
 	slog.Info("Starting web server", "url", app.web.Addr)
 	if err := app.StartWebServer(); err != nil {
-		app.closeModbusServers()
-		return fmt.Errorf("start web server: %w", err)
+		return errors.Join(fmt.Errorf("start web server: %w", err), app.closeModbusServers())
 	}
 
 	return nil
