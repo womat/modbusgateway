@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `modbusgateway` is a Go daemon that puts Modbus devices on the network. Devices sit on **buses** — a serial port (Modbus RTU) or a TCP endpoint — and are offered through a TLS REST API with bearer tokens (hashes in a token file) and through **Modbus listeners**: `listen.tcp` offers the devices on rtu buses to Modbus TCP clients, `listen.rtu` offers the devices on tcp buses to a client on a serial line of its own. Every bus has one worker with a queue and a read cache, so no two requests meet on the wire. Single binary, cross-compiled for the Pi. It shares its skeleton (lifecycle, config, TLS, Makefile, CI, release) with the sibling projects `relayhat`, `s0meter`, `tadl` and `smartmeter` — when changing one of those parts, check whether the others need the same change. The Modbus listeners use the own module `github.com/womat/mbserver`.
 
-The production predecessor was `mbgw` (release `v1.0.10`, `/readholdingregisters` over plain HTTP); 2.0.0 is a rewrite with a different API and configuration.
-
 ## Build / develop
 
 Pure Go, no cgo: `go build ./...`, `go vet ./...` and `go test -race ./...` work on macOS too.

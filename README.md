@@ -72,7 +72,7 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 | `linux_arm64`  | Pi 3 / 4 / 5 / 400 / Zero 2 W with a 64-bit OS        |
 
 ```sh
-VERSION=2.0.0 ARCH=armv6        # see the release page for the latest version
+VERSION=3.0.1 ARCH=armv6        # see the release page for the latest version
 BASE=https://github.com/womat/modbusgateway/releases/download/v$VERSION
 curl -LO $BASE/modbusgateway_${VERSION}_linux_$ARCH.tar.gz -LO $BASE/checksums.txt
 sha256sum -c checksums.txt --ignore-missing
@@ -569,7 +569,7 @@ archives for all Raspberry Pi architectures with the binary, `config/config.yaml
 the major version.
 
 `modbusgateway --version` reports the release a binary was built from. A local build reports
-something like `2.0.0-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
+something like `3.0.1-3-g0c13781-dirty` instead, which is how the two are told apart on a device.
 
 Building from source needs Go and `make`: clone the repository and run `make help` for the targets
 (`make test` and `make lint` together run what CI checks);
@@ -595,29 +595,6 @@ repository. The Modbus side is unchanged.
    Node-RED, set the `http request` node to *bearer authentication*. The web page asks for the token
    once.
 6. A client limited to TLS 1.2 can no longer connect.
-
-### Upgrading to 2.0.0
-
-2.0.0 replaces the per-device connection settings with buses and adds the queue, the cache and the
-Modbus listeners:
-
-| 1.x                                                    | 2.0.0                                                 |
-|--------------------------------------------------------|-------------------------------------------------------|
-| `devices.<name>.transport`, `tcp`, `serial`, `timeout` | an entry in `buses`, referenced with `bus`            |
-| `devices.<name>.deviceId`                              | `unitId`                                              |
-| `devices.<name>.gatewayDeviceId`                       | `gateway: { unitId: N }`                              |
-| `modbusServer: { enabled, listenHost, listenPort }`    | `listen: { tcp: { host, port } }`; block present = on |
-| Modbus TCP gateway read-only (FC1-FC4)                 | FC1-FC6, FC15, FC16, limited by `functions`           |
-| every function code on the REST API                    | `functions` of the device; default reading only       |
-| `POST` writes; FC15/FC16 with the address in the body  | `PUT` with the start address in the path; `value` or `values` picks the function code |
-| `$VAR` and `${VAR}` expanded                           | `${VAR}` only                                         |
-| embedded certificate in every environment              | with `env: dev` only                                  |
-
-An old configuration file is refused with a message that names the new key. The read paths stay
-the same; reads gain `values` and `cached`, and the device status gains `bus`, `functions`,
-`queueLen`, the cache (`cacheTTL`, `cacheHits`, `cacheMisses`), `lastErrorAt` and `gateway`;
-`lastError` now stays until the next error instead of clearing on success. New: the web page at `/`
-and `GET /activity`. Release 1.0.10 and earlier (`mbgw`, `/readholdingregisters`) have a different API.
 
 ---
 
