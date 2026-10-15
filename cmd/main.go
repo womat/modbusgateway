@@ -28,6 +28,12 @@ import (
 //go:embed README.md
 var Readme string
 
+// exitConfig is the exit code for a config file that does not load or validate (EX_CONFIG from
+// sysexits.h). The unit sets RestartPreventExitStatus=78: restarting cannot fix the file, so
+// systemd leaves modbusgateway stopped and "systemctl status modbusgateway" shows why, instead
+// of restarting it every few seconds.
+const exitConfig = 78
+
 // buildDate and buildCommit are injected at build time via -ldflags
 var (
 	buildDate   = "dev"
@@ -67,7 +73,7 @@ func main() {
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		fmt.Println("Error parsing flags:", err)
 		flags.Usage()
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	switch {
@@ -112,7 +118,7 @@ func run(configFile string, debug bool) int {
 	config, err := loadConfig(configFile, debug)
 	if err != nil {
 		fmt.Printf("Failed to load config file %s: %s\n", configFile, err.Error())
-		return 1
+		return exitConfig
 	}
 
 	// lastGood is the configuration the last App ran with. A restart whose new configuration
@@ -134,7 +140,10 @@ func run(configFile string, debug bool) int {
 		default:
 			slog.SetDefault(newLogger.Logger)
 			if logger != nil {
-				_ = logger.Close()
+				// Reported through the new logger, which is already in place.
+				if err := logger.Close(); err != nil {
+					slog.Warn("Failed to close the previous log destination", "error", err)
+				}
 			}
 			logger = newLogger
 			slog.Info("Logging initialized/reloaded", "logLevel", config.LogLevel)
@@ -189,7 +198,6 @@ func About() string {
 		"Commit":   buildCommit,
 		"Desc":     "Modbus devices on the network: HTTPS API and Modbus listeners",
 		"Help":     filepath.Join("/opt", app.MODULE, "bin", app.MODULE) + " --help",
-		"Main":     filepath.Join("/opt/src", app.MODULE, "cmd", app.MODULE, "main.go"),
 		"ProgLang": runtime.Version(),
 		"Repo":     "https://github.com/womat/modbusgateway",
 		"Version":  app.VERSION,
