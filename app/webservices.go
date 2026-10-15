@@ -36,6 +36,15 @@ var embeddedCertFile []byte
 //go:embed certs/dev_key.pem
 var embeddedKeyFile []byte
 
+// newTLSConfig serves cert with TLS 1.3 only. Every caller in this setup (browsers, Node-RED on
+// Node 20, curl) speaks it, and 1.3 leaves no cipher suite to choose badly.
+func newTLSConfig(cert tls.Certificate) *tls.Config {
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS13,
+	}
+}
+
 // StartWebServer initializes and starts the HTTPS server asynchronously.
 // - Production: uses file-based cert/key from config
 // - Development fallback: embedded self-signed cert
@@ -53,10 +62,7 @@ func (app *App) StartWebServer() error {
 		return fmt.Errorf("failed to load TLS certificate: %w", err)
 	}
 
-	// Assign TLS config
-	app.web.TLSConfig = &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12}
+	app.web.TLSConfig = newTLSConfig(cert)
 
 	// Create listener
 	listener, err := net.Listen("tcp", app.web.Addr)
