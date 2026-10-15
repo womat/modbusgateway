@@ -27,7 +27,7 @@ Energy meters, heat pumps, inverters and PV controllers speak Modbus - many of t
 RS485 line that only one computer can reach. modbusgateway runs on the Raspberry Pi at that line and
 makes the devices usable from everywhere on your network:
 
-- a **REST API** over HTTPS with an API key, for Node-RED, Home Assistant, ioBroker, openHAB or a
+- a **REST API** over HTTPS with one bearer token per caller, for Node-RED, Home Assistant, ioBroker, openHAB or a
   `curl` in a script,
 - a **Modbus TCP listener**, so Modbus TCP clients reach the devices on the serial bus - a classic
   RTU-to-TCP gateway,
@@ -42,7 +42,9 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 
 ## Features
 
-- **REST API** (HTTPS, API key, IP allowlist/blocklist) for FC1-FC6, FC15 and FC16
+- **REST API** (HTTPS with TLS 1.3, one bearer token per caller stored only as a SHA-256 hash and
+  managed with `modbusgateway token`, IP allowlist/blocklist; the log names who calls) for FC1-FC6,
+  FC15 and FC16
 - **Modbus TCP listener** for the devices on serial buses, **Modbus RTU listener** for the devices on
   TCP, function codes FC1-FC6, FC15, FC16
 - **One worker per bus**: never two requests on the wire at the same time; writes keep their order
@@ -77,24 +79,29 @@ sha256sum -c checksums.txt --ignore-missing
 tar xzf modbusgateway_${VERSION}_linux_$ARCH.tar.gz
 ```
 
-**2. Install** binary, example configuration and a certificate:
+**2. Install** binary, example configuration and a certificate. Everything belongs to root; the
+service user `modbusgateway` may read `etc/` and write nothing:
 
 ```sh
 sudo groupadd -r -f modbusgateway
 sudo useradd -r -s /usr/sbin/nologin -g modbusgateway modbusgateway
 sudo usermod -aG dialout modbusgateway      # serial ports such as /dev/ttyS0, /dev/ttyUSB0
-sudo mkdir -p /opt/modbusgateway/{bin,etc}
+sudo install -d -o root -g root -m 755 /opt/modbusgateway /opt/modbusgateway/bin
+sudo install -d -o root -g modbusgateway -m 750 /opt/modbusgateway/etc
 
-sudo install -m 755 modbusgateway /opt/modbusgateway/bin/
-sudo install -m 640 config/config.yaml /opt/modbusgateway/etc/
+sudo install -o root -g root -m 755 modbusgateway /opt/modbusgateway/bin/
+sudo install -o root -g modbusgateway -m 640 config/config.yaml /opt/modbusgateway/etc/
 sudo openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
   -keyout /opt/modbusgateway/etc/key.pem -out /opt/modbusgateway/etc/cert.pem -subj "/CN=$(hostname)"
-sudo chown -R modbusgateway:modbusgateway /opt/modbusgateway
+sudo chown root:modbusgateway /opt/modbusgateway/etc/key.pem /opt/modbusgateway/etc/cert.pem
+sudo chmod 640 /opt/modbusgateway/etc/key.pem
 ```
 
-**3. Configure** `/opt/modbusgateway/etc/config.yaml`: set `env: prod`, a random `apiKey`
-(`openssl rand -hex 24`), your buses and one entry per device - see [Configuration](#configuration).
-A minimal setup with one meter on the Pi's UART:
+Why root: whoever can write `config.yaml` or the token file can add a token of their own, and
+whoever can write `bin/modbusgateway` can replace the program. modbusgateway itself needs neither.
+
+**3. Configure** `/opt/modbusgateway/etc/config.yaml`: set `env: prod`, your buses and one entry per
+device - see [Configuration](#configuration). A minimal setup with one meter on the Pi's UART:
 
 ```yaml
 buses:
@@ -109,41 +116,35 @@ devices:
     functions: [FC3]
 ```
 
-**4. Start** it as a service and open the firewall:
+Then create a token for each caller, e.g. the browser and Node-RED:
 
 ```sh
-sudo tee /etc/systemd/system/modbusgateway.service > /dev/null <<'EOF'
-[Unit]
-Description=modbusgateway - Modbus devices on the network
-After=network-online.target
-Wants=network-online.target
+sudo /opt/modbusgateway/bin/modbusgateway token add browser
+sudo /opt/modbusgateway/bin/modbusgateway token add nodered
+```
 
-[Service]
-User=modbusgateway
-Group=modbusgateway
-Type=simple
-ExecStart=/opt/modbusgateway/bin/modbusgateway
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-RestartSec=5
+Each prints its token once; keep it, e.g. in a password manager. See [Tokens](#tokens).
 
-[Install]
-WantedBy=multi-user.target
-EOF
+**4. Start** it as a service, with the unit from the archive, and open the firewall:
 
+```sh
+sudo install -m 644 contrib/modbusgateway.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now modbusgateway
 sudo ufw allow 8443/tcp          # if ufw is active; 1502/tcp for the Modbus TCP listener
 journalctl -u modbusgateway -n 20     # "Module started successfully"
 ```
 
-A Modbus TCP listener on the standard port 502 needs `AmbientCapabilities=CAP_NET_BIND_SERVICE` in
-`[Service]`; the default port 1502 does not.
+The unit runs modbusgateway in a sandbox: no capabilities, a read-only system, only `/dev/ttyS0`
+as a device. Another serial port, e.g. `/dev/ttyUSB0`, goes into `DeviceAllow`, and a Modbus TCP
+listener on the standard port 502 needs `AmbientCapabilities=CAP_NET_BIND_SERVICE` and
+`CapabilityBoundingSet=CAP_NET_BIND_SERVICE`; change both with `sudo systemctl edit
+modbusgateway`. The default port 1502 needs no capability.
 
 **5. Read** the first registers:
 
 ```sh
-curl -k -H "X-Api-Key: your-api-key" \
+curl -k -H "Authorization: Bearer $TOKEN" \
   "https://my-pi:8443/devices/meter/holding-registers/4096?quantity=2"
 ```
 
@@ -205,7 +206,8 @@ the registers:
 
 - `http request`: method `GET`, URL
   `https://my-pi:8443/devices/meter/holding-registers/4096?quantity=59`, return a parsed JSON object,
-  header `X-Api-Key`, and a TLS configuration without certificate verification for the self-signed
+  authentication *bearer authentication* with a token of its own (`modbusgateway token add nodered`;
+  Node-RED keeps it in its encrypted credentials, not in the flow), and a TLS configuration without certificate verification for the self-signed
   certificate.
 - `function`:
 
@@ -231,20 +233,21 @@ a logger can poll the same meter without disturbing each other.
 
 | Method | Path                                                       | Auth    | Description                               |
 |--------|------------------------------------------------------------|---------|-------------------------------------------|
-| GET    | `/`                                                        | —       | [Web page](#web-page); it asks for the API key and reads the endpoints below |
+| GET    | `/`                                                        | —       | [Web page](#web-page); it asks for a token and reads the endpoints below |
 | GET    | `/version`                                                 | —       | Application name and version              |
-| GET    | `/health`                                                  | API key | Runtime health information                |
-| GET    | `/devices`                                                 | API key | Status of all configured devices          |
-| GET    | `/devices/{device}/status`                                 | API key | Status of one configured device           |
-| GET    | `/activity`                                                | API key | Listeners, clients, buses and the last 100 transactions |
-| GET    | `/devices/{device}/coils/{address}?quantity=N`             | API key | Read coils (`FC1`)                        |
-| GET    | `/devices/{device}/discrete-inputs/{address}?quantity=N`   | API key | Read discrete inputs (`FC2`)              |
-| GET    | `/devices/{device}/holding-registers/{address}?quantity=N` | API key | Read holding registers (`FC3`)            |
-| GET    | `/devices/{device}/input-registers/{address}?quantity=N`   | API key | Read input registers (`FC4`)              |
-| PUT    | `/devices/{device}/coils/{address}`                        | API key | Write coils (`FC5` or `FC15`)             |
-| PUT    | `/devices/{device}/holding-registers/{address}`            | API key | Write holding registers (`FC6` or `FC16`) |
+| GET    | `/health`                                                  | Token   | Runtime health information                |
+| GET    | `/devices`                                                 | Token   | Status of all configured devices          |
+| GET    | `/devices/{device}/status`                                 | Token   | Status of one configured device           |
+| GET    | `/activity`                                                | Token   | Listeners, clients, buses and the last 100 transactions |
+| GET    | `/devices/{device}/coils/{address}?quantity=N`             | Token   | Read coils (`FC1`)                        |
+| GET    | `/devices/{device}/discrete-inputs/{address}?quantity=N`   | Token   | Read discrete inputs (`FC2`)              |
+| GET    | `/devices/{device}/holding-registers/{address}?quantity=N` | Token   | Read holding registers (`FC3`)            |
+| GET    | `/devices/{device}/input-registers/{address}?quantity=N`   | Token   | Read input registers (`FC4`)              |
+| PUT    | `/devices/{device}/coils/{address}`                        | Token   | Write coils (`FC5` or `FC15`)             |
+| PUT    | `/devices/{device}/holding-registers/{address}`            | Token   | Write holding registers (`FC6` or `FC16`) |
 
-Authentication via the `X-API-Key` header. Addresses are 0-based, decimal or `0x`-prefixed hex; for
+Authentication with a bearer token from `modbusgateway token add`: `Authorization: Bearer <token>`,
+401 without a valid one. HTTPS is TLS 1.3 only. Addresses are 0-based, decimal or `0x`-prefixed hex; for
 a write the address is the start address.
 
 A read answers `values` - one number per register (unsigned) or one `true`/`false` per coil or input
@@ -293,17 +296,17 @@ transactions with source, client, device, function code, address, quantity, resu
 never holds register values.
 
 ```sh
-curl -k -H "X-Api-Key: your-api-key" https://my-pi:8443/devices
-curl -k -H "X-Api-Key: your-api-key" "https://my-pi:8443/devices/meter/input-registers/0x100?quantity=2"
+curl -k -H "Authorization: Bearer $TOKEN" https://my-pi:8443/devices
+curl -k -H "Authorization: Bearer $TOKEN" "https://my-pi:8443/devices/meter/input-registers/0x100?quantity=2"
 
 # Writes need the function code in functions of the device
-curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+curl -k -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"value":1234}' https://my-pi:8443/devices/heatpump/holding-registers/10                 # FC6
-curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+curl -k -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"values":[10,20,30]}' https://my-pi:8443/devices/heatpump/holding-registers/0x64        # FC16
-curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+curl -k -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"value":true}' https://my-pi:8443/devices/heatpump/coils/5                              # FC5
-curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" \
+curl -k -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"values":[true,false,true,true]}' https://my-pi:8443/devices/heatpump/coils/0x14        # FC15
 ```
 
@@ -330,8 +333,9 @@ curl -k -X PUT -H "X-Api-Key: your-api-key" -H "Content-Type: application/json" 
 - The state in the header names what is wrong: `All devices OK`, `heatpump: 3 timeouts`, or
   `rs485 disconnected`.
 
-The page is part of the binary and loads nothing from the internet. It asks for the API key once and
-keeps it in the browser (`localStorage`).
+The page is part of the binary and loads nothing from the internet. It asks for a token once
+(`modbusgateway token add browser`), keeps it in the browser (`localStorage`) and sends it as a
+bearer token; a rejected token brings the prompt back.
 
 ---
 
@@ -362,7 +366,8 @@ ID 0) are dropped, so a write cannot reach every device at once.
 
 Default path: `/opt/modbusgateway/etc/config.yaml`; `--config` or the environment variable
 `CONFIG_FILE` choose another file. `${VAR}` is replaced with the environment variable `VAR` - only
-this form, a bare `$` stays as it is - e.g. `apiKey: ${MODBUSGATEWAY_API_KEY}`. Unknown keys are an
+this form, a bare `$` stays as it is - e.g. for a password; put it in an `EnvironmentFile=` of the unit
+(root, `0600`), not in the config. Unknown keys are an
 error, so a misspelled key cannot silently fall back to its default; keys of earlier releases fail
 with the new name.
 
@@ -412,7 +417,7 @@ listen:
 | `logDestination` | string | `stdout` | `stdout`, `stderr` or a file path |
 | `env` | string | `dev` | `prod` refuses to start without `certFile`; `dev` falls back to an embedded self-signed certificate |
 | `webserver.listenHost`, `.listenPort` | string, int | `0.0.0.0`, `8443` | Address of the HTTPS API |
-| `webserver.apiKey` | string | — | **Required.** Key for the `X-API-Key` header; a short or example key is logged as a warning |
+| `webserver.tokenFile` | string | — | **Required.** File with the bearer tokens as SHA-256 hashes, see [Tokens](#tokens); relative to the config file |
 | `webserver.certFile`, `.keyFile` | string | — | TLS certificate and key |
 | `webserver.allowedIPs`, `.blockedIPs` | list | empty | Addresses or networks; empty `allowedIPs` allows all |
 | `buses.<name>.type` | string | — | **Required.** `rtu` or `tcp` |
@@ -435,11 +440,69 @@ A serial port or a TCP endpoint belongs to one bus; put all devices behind it on
 
 ---
 
+## Tokens
+
+Every caller gets its own token: a browser, Node-RED, a script. modbusgateway keeps only the SHA-256
+hash of each, in the file named by `webserver.tokenFile`, one line per caller:
+
+```
+# /opt/modbusgateway/etc/tokens
+browser  3f2a…c91e
+nodered  8b04…d7a2
+```
+
+The token itself exists only with the caller. Whoever reads the file cannot call modbusgateway with
+it, so it needs no more protection than the config — but whoever can **write** it can add a token
+of their own: keep it `root:modbusgateway 0640`, like `config.yaml`.
+
+| Command | Does |
+|---|---|
+| `sudo modbusgateway token add <name>` | Writes the hash, then prints the token once, on stdout alone |
+| `sudo modbusgateway token add <name> -dry-run` | Prints token and line, writes nothing |
+| `sudo modbusgateway token remove <name>` | Deletes the line |
+| `sudo modbusgateway token list` | Prints the names, never a hash |
+| `sudo systemctl reload modbusgateway` | Applies a change |
+
+`-config` works as for the service. A new token file gets `0640` and the owner and group of
+`config.yaml`. `add` refuses a name that is taken and prints no token when it cannot write the
+file, so a token that is shown but stored nowhere cannot happen. A name is 1–64 letters, digits,
+`.`, `_` or `-`.
+
+**Rotating without a gap:** `modbusgateway token add nodered-2`, move the caller to the new token,
+`modbusgateway token remove nodered`, reload. A lost token is not recovered but replaced the same
+way.
+
+**In the log:** at start and after every reload modbusgateway names the tokens it accepts
+(`Bearer tokens loaded … names=[browser nodered]`). The first request of each caller from each
+address is logged at info (`user=nodered request.client=… firstAccess=true`), every rejected one
+as a warning with its address; the requests in between at debug.
+
+---
+
+## Security
+
+- The REST API and the web page are served over HTTPS only, TLS 1.3. Use your own certificate and
+  `env: prod` on every device, see [TLS Certificate](#tls-certificate).
+- Give every caller its own token (`modbusgateway token add <name>`); everything except `/`,
+  `/version` and the TLS handshake needs one. modbusgateway stores only their hashes and logs who
+  calls. A token allows writes too, within the `functions` of each device.
+- The Modbus listeners have no authentication, as Modbus has none: whoever reaches them reads and,
+  within `functions`, writes the devices. Bind `listen.tcp` to a trusted interface or protect it
+  with a firewall.
+- Keep `/opt/modbusgateway` owned by root, as in the [Quick start](#quick-start), and run the unit
+  from `contrib/` with its sandbox.
+- Limit who can reach the HTTPS port with `allowedIPs`, e.g. to your home network, and do not
+  expose it to the internet.
+
+Report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
+
+---
+
 ## Reload, restart and stop
 
 | Signal             | Effect                                                                                   |
 |--------------------|------------------------------------------------------------------------------------------|
-| `SIGHUP`           | Reload the configuration: buses, devices and listeners are set up again                  |
+| `SIGHUP`           | Reload the configuration and the token file: buses, devices and listeners are set up again |
 | `SIGTERM`/`SIGINT` | Graceful stop: the listeners and the HTTPS server close, then the bus connections        |
 
 ```sh
@@ -457,7 +520,9 @@ A reload never leaves the devices unreachable:
   one`).
 - A web server that stops on its own restarts the gateway with the current configuration.
 
-Only a configuration that fails on the very first start ends the process.
+Only a configuration that fails on the very first start ends the process, with exit code 78; the
+unit does not restart it then (`RestartPreventExitStatus=78`), and `systemctl status modbusgateway`
+shows why.
 
 ---
 
@@ -470,6 +535,8 @@ Only a configuration that fails on the very first start ends the process.
 | `--version` | `false`                              | Print version and exit          |
 | `--about`   | `false`                              | Print app metadata and exit     |
 | `--help`    | `false`                              | Print embedded help and exit    |
+
+`modbusgateway token add|remove|list` manages the bearer tokens, see [Tokens](#tokens).
 
 ---
 
@@ -487,8 +554,7 @@ maximum validity of 825 days.
 ```sh
 sudo tar czf /tmp/modbusgateway-backup.tar.gz /opt/modbusgateway
 
-sudo tar xzf /tmp/modbusgateway-backup.tar.gz -C /
-sudo chown -R modbusgateway:modbusgateway /opt/modbusgateway
+sudo tar xzf /tmp/modbusgateway-backup.tar.gz -C /     # as root, tar keeps owners and modes
 sudo systemctl restart modbusgateway
 ```
 
@@ -497,8 +563,8 @@ sudo systemctl restart modbusgateway
 ## Releases
 
 Every release on the [releases page](https://github.com/womat/modbusgateway/releases) carries
-archives for all Raspberry Pi architectures with the binary, `config/config.yaml`, `README.md` and
-`LICENSE`, plus a `checksums.txt` and a changelog. Versions follow
+archives for all Raspberry Pi architectures with the binary, `config/config.yaml`,
+`contrib/modbusgateway.service`, `README.md` and `LICENSE`, plus a `checksums.txt` and a changelog. Versions follow
 [semantic versioning](https://semver.org/); a breaking change of the API or the configuration raises
 the major version.
 
@@ -508,6 +574,27 @@ something like `2.0.0-3-g0c13781-dirty` instead, which is how the two are told a
 Building from source needs Go and `make`: clone the repository and run `make help` for the targets
 (`make test` and `make lint` together run what CI checks);
 [`CLAUDE.md`](CLAUDE.md) describes the architecture, the tests and the release process.
+
+### Upgrading to 3.0.0
+
+The API key is replaced by bearer tokens, HTTPS is TLS 1.3 only, and the unit lives in the
+repository. The Modbus side is unchanged.
+
+1. Make `/opt/modbusgateway` root-owned as in the [Quick start](#quick-start).
+2. Put the new binary next to the old one as `bin/modbusgateway.new`, and a copy of the config as
+   `etc/config.yaml.new` with `apiKey: …` replaced by `tokenFile: tokens` (and `jwtSecret`,
+   `jwtID` deleted, if present). The running 2.x is not touched by either.
+3. Create the tokens with the new binary, one per caller: `sudo
+   /opt/modbusgateway/bin/modbusgateway.new token add nodered -config
+   /opt/modbusgateway/etc/config.yaml.new`. This only writes the token file; it opens no port.
+4. Move `modbusgateway.new` and `config.yaml.new` into place, install
+   `contrib/modbusgateway.service`, then `sudo systemctl daemon-reload && sudo systemctl restart
+   modbusgateway`. A config that still has `apiKey` is refused with a message that says so. An
+   environment file that only held the API key is no longer needed; the unit does not load one.
+5. Every caller sends `Authorization: Bearer <token>`; `X-API-Key` is no longer accepted. In
+   Node-RED, set the `http request` node to *bearer authentication*. The web page asks for the token
+   once.
+6. A client limited to TLS 1.2 can no longer connect.
 
 ### Upgrading to 2.0.0
 

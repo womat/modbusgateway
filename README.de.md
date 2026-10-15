@@ -13,8 +13,9 @@ Stromzähler, Wärmepumpen, Wechselrichter und PV-Regler sprechen Modbus – vie
 serielle RS485-Leitung, die nur ein einziger Rechner erreicht. modbusgateway läuft auf dem Raspberry
 Pi an dieser Leitung und macht die Geräte im ganzen Heimnetz nutzbar:
 
-- über eine **REST-API** per HTTPS mit API-Key, z. B. für Node-RED, Home Assistant, ioBroker oder ein
-  `curl` im Skript,
+- über eine **REST-API** per HTTPS (TLS 1.3) mit einem eigenen Token je Aufrufer, z. B. für Node-RED,
+  Home Assistant, ioBroker oder ein `curl` im Skript; modbusgateway speichert davon nur den
+  SHA-256-Hash und schreibt ins Log, wer zugreift,
 - über einen **Modbus-TCP-Eingang**: Modbus-TCP-Clients erreichen die Geräte am seriellen Bus – das
   klassische RTU-auf-TCP-Gateway,
 - über einen **Modbus-RTU-Eingang**: Ein Client an einer seriellen Leitung – etwa ein Wechselrichter,
@@ -36,13 +37,21 @@ ohne Angabe nur lesen. Keine Cloud, keine Datenbank: ein einzelnes Programm und 
    (läuft auf jedem Pi), `armv7` für 32-Bit-Systeme, `arm64` für 64-Bit-Systeme.
 2. **Installieren:** System-User `modbusgateway` anlegen und der Gruppe `dialout` hinzufügen (Zugriff
    auf die serielle Schnittstelle), Programm und `config.yaml` nach `/opt/modbusgateway` kopieren,
-   Zertifikat erzeugen.
-3. **Konfigurieren:** API-Key, unter `buses` die Verbindungen (serielle Schnittstelle oder TCP),
+   Zertifikat erzeugen. Alles gehört root, der Dienst darf `etc/` nur lesen – wer Konfiguration
+   oder Token-Datei schreiben kann, kann sich selbst einen Token eintragen.
+3. **Konfigurieren:** `env: prod`, unter `buses` die Verbindungen (serielle Schnittstelle oder TCP),
    unter `devices` ein Eintrag pro Gerät mit Bus und Unit-ID, auf Wunsch `gateway` für den
    Modbus-Eingang und unter `listen` die Modbus-Eingänge – ein vorhandener Block schaltet ihn ein.
-4. **Starten:** als systemd-Dienst.
+   Dann je Aufrufer einen Token anlegen, z. B. `sudo /opt/modbusgateway/bin/modbusgateway token
+   add nodered`; er wird nur dieses eine Mal angezeigt, siehe [Tokens](README.md#tokens).
+4. **Starten:** mit der Unit aus dem Archiv (`contrib/modbusgateway.service`, läuft abgeschottet).
 5. **Lesen:** `GET https://<dein-pi>:8443/devices/<gerät>/holding-registers/<adresse>?quantity=N` mit
-   dem Header `X-Api-Key`, oder per Modbus TCP an Port 1502.
+   dem Header `Authorization: Bearer <token>` (in Node-RED: *Bearer-Authentifizierung*), oder per
+   Modbus TCP an Port 1502.
+
+**Von 2.x auf 3.0.0:** `apiKey` gibt es nicht mehr, stattdessen `tokenFile` und
+`modbusgateway token add`; HTTPS nur noch mit TLS 1.3. Die Schritte stehen unter
+[Upgrading to 3.0.0](README.md#upgrading-to-300).
 
 **Modbus hat keine Authentifizierung:** Wer den Modbus-TCP-Eingang erreicht, kann alle Function Codes
 nutzen, die die Geräte erlauben. Den Eingang daher an eine vertrauenswürdige Schnittstelle binden
