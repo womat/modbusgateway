@@ -1,0 +1,83 @@
+# systemd unit for modbusgateway.
+#
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin modbusgateway
+#   sudo usermod -aG dialout modbusgateway
+#   sudo install -d -o root -g root -m 0755 /opt/modbusgateway /opt/modbusgateway/bin
+#   sudo install -d -o root -g modbusgateway -m 0750 /opt/modbusgateway/etc
+#   sudo install -o root -g root -m 0755 modbusgateway /opt/modbusgateway/bin/modbusgateway
+#   sudo install -o root -g modbusgateway -m 0640 config/config.yaml /opt/modbusgateway/etc/config.yaml
+#   sudo cp contrib/modbusgateway.service /etc/systemd/system/
+#   sudo /opt/modbusgateway/bin/modbusgateway token add browser
+#   sudo systemctl enable --now modbusgateway
+#
+# Everything under /opt/modbusgateway belongs to root; the group modbusgateway may only
+# read etc/. modbusgateway writes nothing to disk, so the service user needs no write
+# access anywhere - and must not have it: whoever can write config.yaml or the token
+# file can add a token of their own, and whoever can write bin/modbusgateway can
+# replace the program. key.pem goes in as root:modbusgateway 0640, cert.pem as 0644.
+#
+# "systemctl reload modbusgateway" rereads config.yaml and the token file. A config
+# that does not load or validate ends modbusgateway with exit code 78, and
+# RestartPreventExitStatus keeps systemd from restarting it until the file is fixed:
+# "systemctl status modbusgateway" shows why.
+#
+# The sandbox: modbusgateway needs the network (HTTPS, Modbus TCP) and the serial ports
+# of its rtu buses and listener, nothing else. Other serial ports than /dev/ttyS0 (e.g.
+# /dev/ttyUSB0) go into DeviceAllow, see "systemctl edit modbusgateway". The default
+# listen.tcp port 1502 needs no privileges; for a port below 1024 add
+#   AmbientCapabilities=CAP_NET_BIND_SERVICE
+#   CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+# the same way. "systemd-analyze security modbusgateway" rates the result.
+#
+# A password in config.yaml can come from the environment as ${VAR}: put it in
+# /opt/modbusgateway/etc/modbusgateway.env (root:root 0600) and add
+#   EnvironmentFile=/opt/modbusgateway/etc/modbusgateway.env
+# to [Service].
+
+[Unit]
+Description=modbusgateway - Modbus devices on the network: HTTPS API and Modbus listeners
+Documentation=https://github.com/womat/modbusgateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=modbusgateway
+Group=modbusgateway
+ExecStart=/opt/modbusgateway/bin/modbusgateway
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=78
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+UMask=0077
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+# Only the serial port of the rtu bus; PrivateDevices=yes would hide it.
+DevicePolicy=closed
+DeviceAllow=/dev/ttyS0 rw
+
+[Install]
+WantedBy=multi-user.target

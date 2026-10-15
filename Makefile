@@ -162,10 +162,10 @@ BUILD_DEV_TARGETS := $(addsuffix _dev,$(BUILD_TARGETS))
 # Static pattern rules (explicit target lists) instead of plain build_% rules: they work
 # with .PHONY and resolve build_arm6_dev unambiguously, also in GNU Make 3.81 on macOS.
 $(BUILD_TARGETS): build_%: ensure_dev_certs
-	$(GOENV_$*) go build -ldflags "$(LDFLAGS)" -o ./bin/$*/${BINARY_NAME} ./cmd/main.go
+	$(GOENV_$*) go build -trimpath -ldflags "$(LDFLAGS)" -o ./bin/$*/${BINARY_NAME} ./cmd/main.go
 
 $(BUILD_DEV_TARGETS): build_%_dev: ensure_dev_certs
-	$(GOENV_$*) go build -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/$*/${BINARY_NAME} ./cmd/main.go
+	$(GOENV_$*) go build -trimpath -tags swagger -ldflags "$(LDFLAGS)" -o ./bin/$*/${BINARY_NAME} ./cmd/main.go
 
 
 deploy: build_$(PI_ARCH) ## build for $(PI_ARCH) and copy to $(PI_USER)@$(PI_HOST) (override: make deploy PI_ARCH=arm64 PI_HOST=my-pi)
