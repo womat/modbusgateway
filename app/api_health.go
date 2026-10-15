@@ -1,5 +1,5 @@
-// Package app provides HTTP handlers for application health and readiness checks.
-// Health returns runtime metrics; Ready is a Kubernetes readiness probe.
+// HTTP handler for /health: runtime metrics. There is no readiness route; the state of the
+// devices is in /devices.
 
 package app
 
