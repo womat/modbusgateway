@@ -446,7 +446,7 @@ Every caller gets its own token: a browser, Node-RED, a script. modbusgateway ke
 hash of each, in the file named by `webserver.tokenFile`, one line per caller:
 
 ```
-# /opt/modbusgateway/etc/tokens
+# /opt/modbusgateway/etc/token-hashes
 browser  3f2a…c91e
 nodered  8b04…d7a2
 ```
@@ -582,7 +582,7 @@ repository. The Modbus side is unchanged.
 
 1. Make `/opt/modbusgateway` root-owned as in the [Quick start](#quick-start).
 2. Put the new binary next to the old one as `bin/modbusgateway.new`, and a copy of the config as
-   `etc/config.yaml.new` with `apiKey: …` replaced by `tokenFile: tokens` (and `jwtSecret`,
+   `etc/config.yaml.new` with `apiKey: …` replaced by `tokenFile: token-hashes` (and `jwtSecret`,
    `jwtID` deleted, if present). The running 2.x is not touched by either.
 3. Create the tokens with the new binary, one per caller: `sudo
    /opt/modbusgateway/bin/modbusgateway.new token add nodered -config

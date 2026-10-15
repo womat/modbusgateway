@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// writeConfig writes content to a temporary config file, with a token file "tokens" next to it
+// writeConfig writes content to a temporary config file, with a token file "token-hashes" next to it
 // that holds testToken, and returns its path.
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
@@ -21,13 +21,13 @@ func writeConfig(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	tokens := "test " + hex.EncodeToString(sha256Sum(testToken)) + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "tokens"), []byte(tokens), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "token-hashes"), []byte(tokens), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return file
 }
 
-// testToken is accepted by every config from writeConfig that sets "tokenFile: tokens".
+// testToken is accepted by every config from writeConfig that sets "tokenFile: token-hashes".
 const testToken = "0123456789abcdef"
 
 func sha256Sum(s string) []byte {
@@ -37,7 +37,7 @@ func sha256Sum(s string) []byte {
 
 const validBase = `
 webserver:
-  tokenFile: tokens
+  tokenFile: token-hashes
 buses:
   rs485:
     type: rtu
@@ -60,7 +60,7 @@ func load(t *testing.T, content string) (*Config, error) {
 }
 
 func TestLoadConfigExample(t *testing.T) {
-	// readConfig: the example names /opt/modbusgateway/etc/tokens, which does not exist here.
+	// readConfig: the example names /opt/modbusgateway/etc/token-hashes, which does not exist here.
 	cfg, err := readConfig("../config/config.yaml")
 	if err != nil {
 		t.Fatal(err)

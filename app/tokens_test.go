@@ -23,7 +23,7 @@ func writeTokenSetup(t *testing.T, tokenFile, tokens string) string {
 		t.Fatal(err)
 	}
 	if tokens != "" {
-		if err := os.WriteFile(filepath.Join(dir, "tokens"), []byte(tokens), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "token-hashes"), []byte(tokens), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -38,13 +38,13 @@ func tokenLine(name, token string) string {
 // A relative tokenFile is relative to the config file, not to the working directory, so the
 // service and "modbusgateway token" agree on the file.
 func TestLoadConfigReadsTokenFileNextToConfig(t *testing.T) {
-	config := writeTokenSetup(t, "tokens", "# callers\n"+tokenLine("nodered", "secret"))
+	config := writeTokenSetup(t, "token-hashes", "# callers\n"+tokenLine("nodered", "secret"))
 
 	c, err := LoadConfig(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(filepath.Dir(config), "tokens"); c.Webserver.TokenFile != want {
+	if want := filepath.Join(filepath.Dir(config), "token-hashes"); c.Webserver.TokenFile != want {
 		t.Errorf("TokenFile = %q, want %q", c.Webserver.TokenFile, want)
 	}
 	if len(c.Webserver.Tokens) != 1 || c.Webserver.Tokens[0].Name != "nodered" {
@@ -60,7 +60,7 @@ func TestLoadConfigRefusesMissingOrBrokenTokenFile(t *testing.T) {
 		"broken":  "nodered not-a-hash\n",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := LoadConfig(writeTokenSetup(t, "tokens", tokens)); err == nil {
+			if _, err := LoadConfig(writeTokenSetup(t, "token-hashes", tokens)); err == nil {
 				t.Error("LoadConfig accepted it")
 			}
 		})
@@ -69,13 +69,13 @@ func TestLoadConfigRefusesMissingOrBrokenTokenFile(t *testing.T) {
 
 // "modbusgateway token add" asks for the token file before it exists.
 func TestTokenFileNeedsNoTokenFile(t *testing.T) {
-	config := writeTokenSetup(t, "tokens", "")
+	config := writeTokenSetup(t, "token-hashes", "")
 
 	got, err := TokenFile(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(filepath.Dir(config), "tokens"); got != want {
+	if want := filepath.Join(filepath.Dir(config), "token-hashes"); got != want {
 		t.Errorf("TokenFile = %q, want %q", got, want)
 	}
 }

@@ -41,7 +41,7 @@ func newTestApp(t *testing.T) (*mbserver.Server, http.Handler) {
 
 	cfg, err := LoadConfig(writeConfig(t, `
 webserver:
-  tokenFile: tokens
+  tokenFile: token-hashes
 buses:
   lan:
     type: tcp
