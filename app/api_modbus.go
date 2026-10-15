@@ -48,7 +48,7 @@ type ModbusWriteRegistersRequest struct {
 //	@Description	Returns the current connection and health status for all configured Modbus devices.
 //	@Tags			modbus
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{array}		modbusclient.DeviceStatusResponse	"Device status list"
 //	@Failure		401	{string}	string								"Unauthorized"
 //	@Failure		503	{object}	ModbusErrorResponse					"Modbus service unavailable"
@@ -76,7 +76,7 @@ func (app *App) HandleModbusListDeviceStatus() http.Handler {
 //	@Description	Returns the current connection and health status for one configured Modbus device.
 //	@Tags			modbus
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device	path		string								true	"Configured device name"
 //	@Success		200		{object}	modbusclient.DeviceStatusResponse	"Device status"
 //	@Failure		401		{string}	string								"Unauthorized"
@@ -112,7 +112,7 @@ func (app *App) HandleModbusGetDeviceStatus() http.Handler {
 //	@Description	Reads one or more coils from a configured Modbus device.
 //	@Tags			modbus
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device		path		string							true	"Configured device name"
 //	@Param			address		path		string							true	"Start address (decimal or 0x-prefixed hex)"
 //	@Param			quantity	query		int								false	"Number of values to read"	default(1)
@@ -137,7 +137,7 @@ func (app *App) HandleModbusReadCoils() http.Handler {
 //	@Description	Reads one or more discrete inputs from a configured Modbus device.
 //	@Tags			modbus
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device		path		string							true	"Configured device name"
 //	@Param			address		path		string							true	"Start address (decimal or 0x-prefixed hex)"
 //	@Param			quantity	query		int								false	"Number of values to read"	default(1)
@@ -162,7 +162,7 @@ func (app *App) HandleModbusReadDiscreteInputs() http.Handler {
 //	@Description	Reads one or more holding registers from a configured Modbus device.
 //	@Tags			modbus
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device		path		string								true	"Configured device name"
 //	@Param			address		path		string								true	"Start address (decimal or 0x-prefixed hex)"
 //	@Param			quantity	query		int									false	"Number of values to read"	default(1)
@@ -187,7 +187,7 @@ func (app *App) HandleModbusReadHoldingRegisters() http.Handler {
 //	@Description	Reads one or more input registers from a configured Modbus device.
 //	@Tags			modbus
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device		path		string								true	"Configured device name"
 //	@Param			address		path		string								true	"Start address (decimal or 0x-prefixed hex)"
 //	@Param			quantity	query		int									false	"Number of values to read"	default(1)
@@ -213,7 +213,7 @@ func (app *App) HandleModbusReadInputRegisters() http.Handler {
 //	@Tags			modbus
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device	path		string						true	"Configured device name"
 //	@Param			address	path		string						true	"Start address (decimal or 0x-prefixed hex)"
 //	@Param			request	body		ModbusWriteCoilsRequest		true	"Either value (FC 5) or values (FC 15)"
@@ -250,7 +250,7 @@ func (app *App) HandleModbusWriteCoils() http.Handler {
 //	@Tags			modbus
 //	@Accept			json
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Param			device	path		string						true	"Configured device name"
 //	@Param			address	path		string						true	"Start address (decimal or 0x-prefixed hex)"
 //	@Param			request	body		ModbusWriteRegistersRequest	true	"Either value (FC 6) or values (FC 16)"

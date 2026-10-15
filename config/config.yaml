@@ -2,7 +2,7 @@
 # modbusgateway configuration
 #
 # ${VAR} is replaced with the environment variable VAR (only this form, a bare
-# "$" stays as it is), e.g. apiKey: ${MODBUSGATEWAY_API_KEY}.
+# "$" stays as it is), e.g. a password: ${METER_PASSWORD}.
 # Unknown keys are an error, so a typo cannot silently fall back to a default.
 # =============================================================================
 
@@ -31,8 +31,10 @@ webserver:
   # Port the HTTPS server listens on
   listenPort: 8443
 
-  # Global API key for protected endpoints
-  apiKey: changeme!
+  # Bearer tokens accepted on the protected endpoints, one "<name> <sha256>" per line.
+  # Manage it with "modbusgateway token add|remove|list"; a relative path is relative to this file.
+  # The file holds hashes only, but whoever can write it can add a token: owner root.
+  tokenFile: /opt/modbusgateway/etc/tokens
 
   # TLS private key file
   keyFile: /opt/modbusgateway/etc/key.pem

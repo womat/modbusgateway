@@ -28,7 +28,7 @@ func lifecycleConfig(t *testing.T, webPort, modbusPort int) *Config {
 	t.Helper()
 	cfg, err := LoadConfig(writeConfig(t, `
 webserver:
-  apiKey: 0123456789abcdef
+  tokenFile: tokens
 buses:
   serial:
     type: rtu

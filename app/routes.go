@@ -2,7 +2,7 @@
 // It supports authentication, Swagger documentation (dev only), and monitoring endpoints.
 // Routes:
 // - Public routes without authentication (e.g., version)
-// - Protected routes requiring API key or JWT
+// - Protected routes requiring a bearer token from the token file
 // - Swagger documentation (only in development) at /swagger/
 // - The web page at / (public, it holds no data)
 // - Health, device status, activity, and the Modbus read (GET) and write (PUT) endpoints
@@ -23,12 +23,7 @@ import (
 
 // SetupRoutes configures all HTTP routes and global middleware for the application.
 func (app *App) SetupRoutes() {
-	webCfg := web.Config{
-		ApiKey:    app.config.Webserver.ApiKey,
-		JwtSecret: app.config.Webserver.JwtSecret,
-		JwtID:     app.config.Webserver.JwtID,
-		AppName:   MODULE,
-	}
+	webCfg := app.webConfig()
 
 	mux := http.NewServeMux()
 
@@ -64,16 +59,18 @@ func (app *App) SetupRoutes() {
 	// preflight OPTIONS.
 	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodPut, http.MethodOptions))
 	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
-	handler = WithLogging(handler)
+	// One entry per request with client and caller. Node-RED and the web page poll every few
+	// seconds, so successful requests go to Debug; a rejected one shows as a warning.
+	handler = web.WithLogging(handler, slog.Default(), web.WithSuccessLevel(slog.LevelDebug))
 	app.web.Handler = handler
 }
 
-func WithLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("Incoming web request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"client_ip", r.RemoteAddr)
-		next.ServeHTTP(w, r)
-	})
+// webConfig is the authentication of the protected routes: the bearer tokens from the token
+// file, nothing else. With ApiKey, JwtSecret and JwtID left empty, golib's other paths stay
+// disabled.
+func (app *App) webConfig() web.Config {
+	return web.Config{
+		Tokens:  app.config.Webserver.Tokens,
+		AppName: MODULE,
+	}
 }

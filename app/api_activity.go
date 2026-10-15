@@ -84,7 +84,7 @@ type TransactionActivity struct {
 //	@Description	Returns the listeners, the clients of the last 10 min (REST callers of /devices/…, Modbus TCP connections, the Modbus RTU line), the buses and the last 100 transactions. No register values.
 //	@Tags			info
 //	@Produce		json
-//	@Security		ApiKeyAuth
+//	@Security		BearerAuth
 //	@Success		200	{object}	ActivityResponse	"Activity"
 //	@Failure		401	{string}	string				"Unauthorized"
 //	@Router			/activity [get]

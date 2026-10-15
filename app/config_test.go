@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"slices"
@@ -9,19 +11,33 @@ import (
 	"time"
 )
 
-// writeConfig writes content to a temporary config file and returns its path.
+// writeConfig writes content to a temporary config file, with a token file "tokens" next to it
+// that holds testToken, and returns its path.
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
-	file := filepath.Join(t.TempDir(), "config.yaml")
+	dir := t.TempDir()
+	file := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(file, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tokens := "test " + hex.EncodeToString(sha256Sum(testToken)) + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "tokens"), []byte(tokens), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return file
 }
 
+// testToken is accepted by every config from writeConfig that sets "tokenFile: tokens".
+const testToken = "0123456789abcdef"
+
+func sha256Sum(s string) []byte {
+	sum := sha256.Sum256([]byte(s))
+	return sum[:]
+}
+
 const validBase = `
 webserver:
-  apiKey: 0123456789abcdef
+  tokenFile: tokens
 buses:
   rs485:
     type: rtu
@@ -44,7 +60,8 @@ func load(t *testing.T, content string) (*Config, error) {
 }
 
 func TestLoadConfigExample(t *testing.T) {
-	cfg, err := LoadConfig("../config/config.yaml")
+	// readConfig: the example names /opt/modbusgateway/etc/tokens, which does not exist here.
+	cfg, err := readConfig("../config/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +72,8 @@ func TestLoadConfigExample(t *testing.T) {
 		t.Errorf("the example config should show buses, devices and the tcp listener: %+v", cfg)
 	}
 	warnings := strings.Join(cfg.Warnings(), "\n")
-	if !strings.Contains(warnings, "smartfox") || !strings.Contains(warnings, "apiKey is still the example value") {
-		t.Errorf("warnings = %v, want one for smartfox, whose listener is commented out, and one for the example apiKey", warnings)
+	if !strings.Contains(warnings, "smartfox") {
+		t.Errorf("warnings = %v, want one for smartfox, whose listener is commented out", warnings)
 	}
 }
 
@@ -191,6 +208,7 @@ func TestLoadConfigExplainsOldKeys(t *testing.T) {
 		"modbusServer":     {"modbusServer:\n  enabled: true\n", "modbusServer: renamed to listen"},
 		"listen enabled":   {"listen:\n  tcp:\n    enabled: true\n", "enabled: removed"},
 		"bus transport":    {"buses:\n  b:\n    transport: rtu\n", "transport: renamed to type"},
+		"jwtSecret":        {"webserver:\n  jwtSecret: x\n", "jwtSecret: removed"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := LoadConfig(writeConfig(t, tc.content))
@@ -201,25 +219,15 @@ func TestLoadConfigExplainsOldKeys(t *testing.T) {
 	}
 }
 
-// Only ${VAR} is expanded, so an API key containing "$" stays as it is.
+// Only ${VAR} is expanded, so a password containing "$" stays as it is.
 func TestLoadConfigExpandsBracedVariablesOnly(t *testing.T) {
 	t.Setenv("MODBUSGATEWAY_TEST_KEY", "from-env")
-	cfg, err := LoadConfig(writeConfig(t, "webserver:\n  apiKey: ${MODBUSGATEWAY_TEST_KEY}\n  keyFile: /tmp/pa$word\n"))
+	cfg, err := LoadConfig(writeConfig(t, "webserver:\n  certFile: ${MODBUSGATEWAY_TEST_KEY}\n  keyFile: /tmp/pa$word\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Webserver.ApiKey != "from-env" || cfg.Webserver.KeyFile != "/tmp/pa$word" {
-		t.Errorf("apiKey = %q, keyFile = %q; want the environment value and an untouched $", cfg.Webserver.ApiKey, cfg.Webserver.KeyFile)
-	}
-}
-
-func TestWarningsWeakApiKey(t *testing.T) {
-	for key, want := range map[string]bool{"changeme!": true, "short": true, "0123456789abcdef": false} {
-		cfg := NewConfig()
-		cfg.Webserver.ApiKey = key
-		if got := len(cfg.Warnings()) == 1; got != want {
-			t.Errorf("apiKey %q: warning = %v, want %v", key, got, want)
-		}
+	if cfg.Webserver.CertFile != "from-env" || cfg.Webserver.KeyFile != "/tmp/pa$word" {
+		t.Errorf("certFile = %q, keyFile = %q; want the environment value and an untouched $", cfg.Webserver.CertFile, cfg.Webserver.KeyFile)
 	}
 }
 

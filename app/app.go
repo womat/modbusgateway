@@ -101,6 +101,17 @@ func (app *App) Run() (*App, error) {
 	// handle the OS signals
 	app.HandleOSSignals()
 
+	names := make([]string, 0, len(app.config.Webserver.Tokens))
+	for _, t := range app.config.Webserver.Tokens {
+		names = append(names, t.Name)
+	}
+	if len(names) == 0 {
+		slog.Warn("No bearer tokens loaded, every request to the REST API is rejected",
+			"tokenFile", app.config.Webserver.TokenFile)
+	} else {
+		slog.Info("Bearer tokens loaded", "tokenFile", app.config.Webserver.TokenFile, "names", names)
+	}
+
 	slog.Info("Starting application")
 	if err := app.Start(); err != nil {
 		slog.Error("Application failed to start", "error", err)

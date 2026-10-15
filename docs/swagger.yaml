@@ -345,7 +345,7 @@ paths:
           schema:
             type: string
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get the communication activity
       tags:
       - info
@@ -371,7 +371,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: List configured device status
       tags:
       - modbus
@@ -430,7 +430,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 'FC 1: Read coils'
       tags:
       - modbus
@@ -493,7 +493,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 'FC 5 / FC 15: Write coils'
       tags:
       - modbus
@@ -552,7 +552,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 'FC 2: Read discrete inputs'
       tags:
       - modbus
@@ -611,7 +611,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 'FC 3: Read holding registers'
       tags:
       - modbus
@@ -674,7 +674,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 'FC 6 / FC 16: Write holding registers'
       tags:
       - modbus
@@ -733,7 +733,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: 'FC 4: Read input registers'
       tags:
       - modbus
@@ -767,7 +767,7 @@ paths:
           schema:
             $ref: '#/definitions/app.ModbusErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get device status
       tags:
       - modbus
@@ -787,7 +787,7 @@ paths:
           schema:
             type: string
       security:
-      - ApiKeyAuth: []
+      - BearerAuth: []
       summary: Get health data
       tags:
       - info
@@ -811,8 +811,9 @@ paths:
       tags:
       - info
 securityDefinitions:
-  ApiKeyAuth:
+  BearerAuth:
+    description: A token from "modbusgateway token add <name>", sent as "Bearer <token>".
     in: header
-    name: X-API-Key
+    name: Authorization
     type: apiKey
 swagger: "2.0"

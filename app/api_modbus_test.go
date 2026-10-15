@@ -16,8 +16,6 @@ import (
 	"github.com/womat/mbserver"
 )
 
-const testApiKey = "0123456789abcdef"
-
 // newTestApp starts a Modbus TCP device and returns an App with the devices "meter" (unit 1,
 // reading only, values cached) and "pump" (unit 2, writes with FC5, FC6 and FC15 but not FC16)
 // on it, and its HTTP handler.
@@ -43,7 +41,7 @@ func newTestApp(t *testing.T) (*mbserver.Server, http.Handler) {
 
 	cfg, err := LoadConfig(writeConfig(t, `
 webserver:
-  apiKey: `+testApiKey+`
+  tokenFile: tokens
 buses:
   lan:
     type: tcp
@@ -72,7 +70,7 @@ func request(t *testing.T, h http.Handler, method, path, body string) (int, map[
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("X-Api-Key", testApiKey)
+	req.Header.Set("Authorization", "Bearer "+testToken)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	var resp map[string]any

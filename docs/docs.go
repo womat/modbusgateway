@@ -19,7 +19,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Returns the listeners, the clients of the last 10 min (REST callers of /devices/…, Modbus TCP connections, the Modbus RTU line), the buses and the last 100 transactions. No register values.",
@@ -50,7 +50,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Returns the current connection and health status for all configured Modbus devices.",
@@ -90,7 +90,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Reads one or more coils from a configured Modbus device.",
@@ -178,7 +178,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Writes coils starting at the address. {\"value\": true} writes one coil with FC 5, {\"values\": [true, false]} writes one or more coils with FC 15 — also for a single value, for devices that only accept FC 15.",
@@ -273,7 +273,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Reads one or more discrete inputs from a configured Modbus device.",
@@ -363,7 +363,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Reads one or more holding registers from a configured Modbus device.",
@@ -451,7 +451,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Writes holding registers starting at the address. {\"value\": 7} writes one register with FC 6, {\"values\": [7, 8]} writes one or more registers with FC 16 — also for a single value, for devices that only accept FC 16.",
@@ -546,7 +546,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Reads one or more input registers from a configured Modbus device.",
@@ -636,7 +636,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Returns the current connection and health status for one configured Modbus device.",
@@ -688,7 +688,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "description": "Retrieves memory usage, goroutine count, version, hostname, Go runtime version, and OS.",
@@ -1223,9 +1223,10 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "ApiKeyAuth": {
+        "BearerAuth": {
+            "description": "A token from \"modbusgateway token add \u003cname\u003e\", sent as \"Bearer \u003ctoken\u003e\".",
             "type": "apiKey",
-            "name": "X-API-Key",
+            "name": "Authorization",
             "in": "header"
         }
     }
