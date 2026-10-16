@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/womat/golib/web"
+	"github.com/womat/golib/v2/web"
 )
 
 // writeTokenSetup writes a config naming tokenFile and, unless tokens is empty, the token file

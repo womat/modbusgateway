@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/womat/golib/web"
+	"github.com/womat/golib/v2/web"
 	"github.com/womat/modbusgateway/app/service/modbusclient"
 	"github.com/womat/modbusgateway/pkg/activity"
 	"github.com/womat/modbusgateway/pkg/modbusmanager"

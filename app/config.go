@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/womat/golib/web"
+	"github.com/womat/golib/v2/web"
 	"gopkg.in/yaml.v3"
 )
 

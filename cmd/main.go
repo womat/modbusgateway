@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/womat/golib/web"
-	"github.com/womat/golib/xlog"
+	"github.com/womat/golib/v2/web"
+	"github.com/womat/golib/v2/xlog"
 	"github.com/womat/modbusgateway/app"
 	"gopkg.in/yaml.v3"
 )

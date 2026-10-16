@@ -74,7 +74,7 @@ Layering is strict: `cmd` → `app` → `app/service/*` → `pkg/*`. Lower layer
 - **`app/ui/index.html` / `api_ui.go`** — the web page at `GET /{$}`, embedded, public (no data), CSP limited to inline script/style and this server; same header, footer, login, logo style and favicon rule as the sibling pages. It polls `/health`, `/devices` and `/activity` every 2 s and never shows register values. Screenshots in `docs/screenshots/` and `docs/social-preview.png`, rendered with sample data (see Screenshots).
 - **`app/webservices.go`** — HTTPS only; the embedded dev cert is used only with `env: dev`, because its key ships in every release.
 
-**External dependencies:** `github.com/simonvetter/modbus` (client side, TCP and RTU), `github.com/womat/mbserver` (listeners, TCP and RTU server), `github.com/womat/golib` (`web`, `xlog`). Read them in `$(go env GOMODCACHE)` when behavior is unclear.
+**External dependencies:** `github.com/simonvetter/modbus` (client side, TCP and RTU), `github.com/womat/mbserver` (listeners, TCP and RTU server), `github.com/womat/golib/v2` (`web`, `xlog`). Read them in `$(go env GOMODCACHE)` when behavior is unclear.
 
 ## Conventions
 

@@ -6,7 +6,7 @@ require (
 	github.com/simonvetter/modbus v1.6.4
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.6
-	github.com/womat/golib v1.5.1
+	github.com/womat/golib/v2 v2.0.0
 	github.com/womat/mbserver v0.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -24,7 +24,6 @@ require (
 	github.com/go-openapi/swag/typeutils v0.29.2 // indirect
 	github.com/go-openapi/swag/yamlutils v0.29.2 // indirect
 	github.com/goburrow/serial v0.1.0 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/swaggo/files v1.0.1 // indirect

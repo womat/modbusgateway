@@ -3,7 +3,7 @@ package app
 import (
 	"net/http"
 
-	"github.com/womat/golib/web"
+	"github.com/womat/golib/v2/web"
 )
 
 // HandleVersion returns the application name and version.

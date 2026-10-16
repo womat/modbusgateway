@@ -611,10 +611,9 @@ modules below. Their terms apply to anyone distributing that binary, not to the 
 |---------------------------------------------------|------------------------|
 | `github.com/simonvetter/modbus`                   | MIT                    |
 | `github.com/womat/mbserver`                       | MIT                    |
-| `github.com/womat/golib`                          | MIT                    |
+| `github.com/womat/golib/v2`                       | MIT                    |
 | `github.com/goburrow/serial`                      | MIT                    |
 | `go.bug.st/serial`                                | BSD-3-Clause           |
-| `github.com/golang-jwt/jwt/v5`                    | MIT                    |
 | `gopkg.in/yaml.v3`                                | MIT and Apache-2.0     |
 | `golang.org/x/sys`                                | BSD-3-Clause           |
 | Swagger UI build only (`-tags swagger`):          |                        |
