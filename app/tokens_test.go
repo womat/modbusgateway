@@ -91,19 +91,6 @@ func TestValidateNeedsTokenFile(t *testing.T) {
 	}
 }
 
-// An old config with apiKey fails with a message that names the replacement, not just
-// "unknown key".
-func TestValidateRejectsApiKey(t *testing.T) {
-	c, err := load(t, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.Webserver.ApiKey = "old"
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "tokenFile") {
-		t.Errorf("Validate with apiKey: %v", err)
-	}
-}
-
 // The protected routes take a token from the token file as a bearer token, nothing else.
 func TestWebConfigTakesBearerTokens(t *testing.T) {
 	c := NewConfig()

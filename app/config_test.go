@@ -238,6 +238,7 @@ func TestLoadConfigExplainsOldKeys(t *testing.T) {
 		"listen enabled":   {"listen:\n  tcp:\n    enabled: true\n", "enabled: removed"},
 		"bus transport":    {"buses:\n  b:\n    transport: rtu\n", "transport: renamed to type"},
 		"jwtSecret":        {"webserver:\n  jwtSecret: x\n", "jwtSecret: removed"},
+		"apiKey":           {"webserver:\n  apiKey: x\n", `apiKey: removed: create a token with "modbusgateway token add <name>" and set webserver.tokenFile`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := LoadConfig(writeConfig(t, tc.content))

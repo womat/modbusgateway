@@ -49,7 +49,6 @@ type Config struct {
 type WebserverConfig struct {
 	ListenHost string      `yaml:"listenHost"` // Host address for web server
 	ListenPort int         `yaml:"listenPort"` // Port for web server
-	ApiKey     string      `yaml:"apiKey"`     // Removed in v3; only read to name the replacement
 	TokenFile  string      `yaml:"tokenFile"`  // File with the accepted bearer tokens as SHA-256 hashes
 	Tokens     []web.Token `yaml:"-"`          // Read from TokenFile by LoadConfig
 	KeyFile    string      `yaml:"keyFile"`    // SSL private key file
@@ -258,6 +257,7 @@ var renamedKeys = map[string]string{
 	"ListenRTUConfig.enabled":      "removed: a listener is active when its block is present; delete or comment out the block to turn it off",
 	"WebserverConfig.jwtSecret":    "removed: authentication is by bearer tokens from webserver.tokenFile only",
 	"WebserverConfig.jwtID":        "removed: authentication is by bearer tokens from webserver.tokenFile only",
+	"WebserverConfig.apiKey":       `removed: create a token with "modbusgateway token add <name>" and set webserver.tokenFile`,
 }
 
 // unknownField matches the key and type in yaml.v3's "field X not found in type pkg.Y".
@@ -285,10 +285,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid environment: %s, must be %s or %s", c.Env, ProdEnv, DevEnv)
 	}
 
-	if c.Webserver.ApiKey != "" {
-		return errors.New(`webserver.apiKey is no longer supported; create a token with ` +
-			`"modbusgateway token add <name>" and set webserver.tokenFile`)
-	}
 	if c.Webserver.TokenFile == "" {
 		return errors.New(`webserver.tokenFile is not configured; create a token with "modbusgateway token add <name>"`)
 	}
