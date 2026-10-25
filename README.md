@@ -72,7 +72,7 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 | `linux_arm64`  | Pi 3 / 4 / 5 / 400 / Zero 2 W with a 64-bit OS        |
 
 ```sh
-VERSION=3.0.2 ARCH=armv6        # see the release page for the latest version
+VERSION=3.0.3 ARCH=armv6        # see the release page for the latest version
 BASE=https://github.com/womat/modbusgateway/releases/download/v$VERSION
 curl -LO $BASE/modbusgateway_${VERSION}_linux_$ARCH.tar.gz -LO $BASE/checksums.txt
 sha256sum -c checksums.txt --ignore-missing
