@@ -3,6 +3,7 @@ package modbusmanager
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -463,7 +464,12 @@ func clientConfiguration(cfg BusConfig) (*simonmodbus.ClientConfiguration, error
 	if cfg.Timeout <= 0 {
 		return nil, fmt.Errorf("%w for bus %q", ErrTimeoutMustBePositive, cfg.Name)
 	}
-	conf := &simonmodbus.ClientConfiguration{Timeout: cfg.Timeout}
+	// Without a Logger the library writes to stdout, past logDestination and logLevel. It logs
+	// warnings and errors only, so its lines go to the current slog logger as warnings.
+	conf := &simonmodbus.ClientConfiguration{
+		Timeout: cfg.Timeout,
+		Logger:  slog.NewLogLogger(slog.Default().Handler(), slog.LevelWarn),
+	}
 
 	switch strings.ToLower(cfg.Type) {
 	case "tcp":
