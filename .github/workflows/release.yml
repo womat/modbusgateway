@@ -5,8 +5,7 @@
 # The tag is the single source of truth for the version: GoReleaser injects it
 # into app.VERSION via -ldflags, so the binary always reports the tag it was cut from.
 #
-# Before anything is published the tagged commit is tested, vetted and scanned
-# again: a release must not depend on whether the CI run of that commit passed.
+# Before anything is published the tagged commit is tested and linted again: a release must not depend on whether the CI run of that commit passed.
 # Actions are pinned to a commit SHA, with the release in a comment.
 name: release
 
@@ -50,21 +49,11 @@ jobs:
       - name: Test with race detector
         run: make test
 
-      # Vetted for the deployment target, a Pi in 32-bit mode.
-      - name: Vet
-        env:
-          GOOS: linux
-          GOARCH: arm
-          GOARM: "6"
-        run: |
-          go vet ./...
-          go vet -tags swagger ./...
-
-      # Pinned like in ci.yml. Built for the runner, analysing the deployment target.
-      - name: Vulnerability scan
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-          GOOS=linux GOARCH=arm GOARM=6 "$(go env GOPATH)/bin/govulncheck" ./...
+      # gofmt, go vet, golangci-lint and govulncheck for the deployment target, a Pi in
+      # 32-bit mode (PI_ARCH=arm6, the default) - the same as ci.yml and make lint locally,
+      # with the analysers pinned in the Makefile.
+      - name: Lint
+        run: make lint
 
       - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:

@@ -82,11 +82,12 @@ clean: ## Remove build related file
 test: ensure_dev_certs ## run all tests with the race detector
 	go test -race ./...
 
-# The analysers are pinned like in the workflows (dependabot does not see them) and
-# installed into ./bin/tools for this machine, then run against the deployment
-# target: GOOS=linux brings in the Linux-only RTU listener test, and `go run` with
-# a target GOOS/GOARCH would build a tool binary this machine cannot execute.
-# Both build variants are linted, with and without the Swagger UI.
+# The analysers are pinned here only - ci.yml and release.yml call make lint - and
+# raised by hand: dependabot does not see go install lines. They are installed into
+# ./bin/tools for this machine, then run against the deployment target: GOOS=linux
+# brings in the Linux-only RTU listener test, and `go run` with a target GOOS/GOARCH
+# would build a tool binary this machine cannot execute. Both build variants are
+# linted, with and without the Swagger UI.
 GOLANGCI_LINT_VERSION := v2.15.0
 GOVULNCHECK_VERSION   := v1.9.0
 TOOLS_BIN             := $(CURDIR)/bin/tools

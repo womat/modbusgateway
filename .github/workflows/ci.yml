@@ -33,25 +33,20 @@ jobs:
       - name: Test with race detector
         run: make test
 
+  # The same checks as `make lint` locally, for each released target: gofmt, go vet,
+  # golangci-lint and govulncheck, with and without the Swagger UI. The analysers are
+  # pinned in the Makefile only; make installs them for the runner and runs them against
+  # the target, so the job sets no GOOS/GOARCH of its own (a tool built for arm would not
+  # start on the runner).
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # The three targets that are actually released. armv6 is the default
-        # deployment target (it runs on every Pi, and a Pi Zero needs it), so it
-        # must not be the one that goes untested.
-        include:
-          - goarch: arm
-            goarm: "6"
-          - goarch: arm
-            goarm: "7"
-          - goarch: arm64
-            goarm: ""
-    env:
-      GOOS: linux
-      GOARCH: ${{ matrix.goarch }}
-      GOARM: ${{ matrix.goarm }}
+        # PI_ARCH of the Makefile: the three targets that are actually released. arm6 is
+        # the default deployment target (it runs on every Pi, and a Pi Zero needs it), so
+        # it must not be the one that goes untested.
+        arch: [arm6, arm7, arm64]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -60,53 +55,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # app/certs/ is gitignored but embedded by app/webservices.go.
-      - name: Generate development TLS certificates
-        run: make ensure_dev_certs
+      # govulncheck exits non-zero only when this code calls a vulnerable symbol;
+      # advisories that only sit in required modules are reported but do not fail.
+      - name: Lint
+        run: make lint PI_ARCH=${{ matrix.arch }}
 
-      - name: Vet
-        run: go vet ./...
-
-      - name: Build
-        run: go build ./...
-
-      # The Swagger UI sits behind a build tag, so a plain build never compiles it.
-      - name: Build with Swagger UI
-        run: go build -tags swagger ./...
-
-      # govulncheck must be BUILT for the runner but ANALYSE the target
-      # architecture. Installing it under the job-level GOOS/GOARCH would produce
-      # an arm binary the runner cannot execute ("exec format error"), so the
-      # install step clears them - empty values fall back to the host - while the
-      # scan step keeps them and so inspects the matrix target.
-      - name: Install govulncheck
-        env:
-          GOOS: ""
-          GOARCH: ""
-          GOARM: ""
-        # Pinned rather than @latest, so a new release cannot turn CI red without a
-        # change here. dependabot does not see go install lines - raise it by hand.
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-
-      # golangci-lint with the default linters and the exclusions in .golangci.yml,
-      # installed for the runner like govulncheck and run for the matrix target, so
-      # the Linux-only RTU listener test is linted too. Both build variants, with
-      # and without the Swagger UI. Pinned like govulncheck; dependabot does not
-      # see it - raise it by hand.
-      - name: Install golangci-lint
-        env:
-          GOOS: ""
-          GOARCH: ""
-          GOARM: ""
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-
-      - name: golangci-lint
-        run: |
-          "$(go env GOPATH)/bin/golangci-lint" run ./...
-          "$(go env GOPATH)/bin/golangci-lint" run --build-tags swagger ./...
-
-      # Exits non-zero when this code actually calls a vulnerable symbol.
-      # Advisories that only sit in required modules are reported but do not
-      # fail the build, which keeps the signal on what is reachable from here.
-      - name: Vulnerability scan
-        run: $(go env GOPATH)/bin/govulncheck ./...
+      # The Swagger UI sits behind a build tag, so the plain build never compiles it.
+      - name: Build, with and without Swagger UI
+        run: make build_${{ matrix.arch }} build_${{ matrix.arch }}_dev
