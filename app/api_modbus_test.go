@@ -163,6 +163,11 @@ func TestRESTWriteBody(t *testing.T) {
 			t.Errorf("body %q: %d %v, want 400", body, code, resp)
 		}
 	}
+	// A body past the limit is refused before it is read in full.
+	huge := `{"values":[` + strings.Repeat("1,", maxWriteBody) + `1]}`
+	if code, resp := request(t, h, http.MethodPut, "/devices/pump/holding-registers/0", huge); code != http.StatusBadRequest || !strings.Contains(resp["error"].(string), "too large") {
+		t.Errorf("body of %d bytes: %d %v, want 400, request body too large", len(huge), code, resp)
+	}
 	if code, _ := request(t, h, http.MethodPost, "/devices/pump/holding-registers/0", `{"value":1}`); code != http.StatusMethodNotAllowed {
 		t.Errorf("POST: %d, want 405", code)
 	}

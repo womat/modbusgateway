@@ -398,6 +398,10 @@ func decodeWriteBody(r *http.Request, dst any, set func() (value, values bool)) 
 	return nil
 }
 
+// maxWriteBody bounds the body of a write. The largest valid one, 1968 coils, takes about 12 KiB;
+// a larger body is refused before it is read into memory.
+const maxWriteBody = 64 << 10
+
 // writeCall is a decoded write: its function code, the number of values and the call itself.
 type writeCall struct {
 	fc  uint8
@@ -420,6 +424,7 @@ func (app *App) handleWrite(decode func(device string, register uint16, r *http.
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, maxWriteBody)
 		call, err := decode(device, register, r)
 		if err != nil {
 			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: err.Error()})
