@@ -87,8 +87,8 @@ test: ensure_dev_certs ## run all tests with the race detector
 # target: GOOS=linux brings in the Linux-only RTU listener test, and `go run` with
 # a target GOOS/GOARCH would build a tool binary this machine cannot execute.
 # Both build variants are linted, with and without the Swagger UI.
-GOLANGCI_LINT_VERSION := v2.14.0
-GOVULNCHECK_VERSION   := v1.8.0
+GOLANGCI_LINT_VERSION := v2.15.0
+GOVULNCHECK_VERSION   := v1.9.0
 TOOLS_BIN             := $(CURDIR)/bin/tools
 
 lint: ensure_dev_certs ## gofmt, go vet, golangci-lint and govulncheck, for the deployment target ($(PI_ARCH))

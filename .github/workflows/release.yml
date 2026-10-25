@@ -63,7 +63,7 @@ jobs:
       # Pinned like in ci.yml. Built for the runner, analysing the deployment target.
       - name: Vulnerability scan
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           GOOS=linux GOARCH=arm GOARM=6 "$(go env GOPATH)/bin/govulncheck" ./...
 
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
