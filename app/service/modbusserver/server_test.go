@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -309,5 +310,30 @@ func TestAddressAndQuantity(t *testing.T) {
 	frame.SetData(data)
 	if addr, qty, ok := addressAndQuantity(frame); !ok || addr != 4096 || qty != 59 {
 		t.Errorf("addressAndQuantity = %d, %d, %v; want 4096, 59, true", addr, qty, ok)
+	}
+}
+
+// TestException: every manager error maps to its exception, also when wrapped; an exception of
+// the device is passed on, and what the gateway cannot name means the device did not answer.
+func TestException(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want mbserver.Exception
+	}{
+		{modbusmanager.ErrFunctionNotAllowed, mbserver.IllegalFunction},
+		{modbusmanager.ErrAddressOutOfRange, mbserver.IllegalDataAddress},
+		{modbusmanager.ErrLengthExceedsRegisterLimit, mbserver.IllegalDataValue},
+		{modbusmanager.ErrValuesEmpty, mbserver.IllegalDataValue},
+		{modbusmanager.ErrDeviceNotConfigured, mbserver.GatewayPathUnavailable},
+		{modbusmanager.ErrBusBusy, mbserver.ServerDeviceBusy},
+		{modbusmanager.ErrQueueTimeout, mbserver.GatewayTargetDeviceFailedToRespond},
+		{modbusmanager.ErrManagerClosed, mbserver.GatewayTargetDeviceFailedToRespond},
+		{simonmodbus.ErrServerDeviceFailure, mbserver.ServerDeviceFailure},
+		{simonmodbus.ErrIllegalDataAddress, mbserver.IllegalDataAddress},
+		{simonmodbus.ErrRequestTimedOut, mbserver.GatewayTargetDeviceFailedToRespond},
+	} {
+		if got := exception(fmt.Errorf("read device %q: %w", "x", tc.err)); got != tc.want {
+			t.Errorf("%v: exception %v, want %v", tc.err, got, tc.want)
+		}
 	}
 }

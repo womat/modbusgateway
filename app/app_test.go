@@ -94,7 +94,8 @@ func TestFailedRunReleasesItsPorts(t *testing.T) {
 	defer busy.Close()
 
 	// The Modbus listener starts, then the web server fails on the busy port.
-	if _, err = New(lifecycleConfig(t, webPort, modbusPort), make(chan os.Signal, 1), nil).Run(); err == nil {
+	signals := make(chan os.Signal, 1)
+	if _, err = New(lifecycleConfig(t, webPort, modbusPort), signals, nil).Run(); err == nil {
 		t.Fatal("Run succeeded on a busy web port")
 	}
 
@@ -103,6 +104,14 @@ func TestFailedRunReleasesItsPorts(t *testing.T) {
 		t.Fatalf("the Modbus port is still in use after the failed Run: %v", err)
 	}
 	_ = l.Close()
+
+	// The signal handler of the failed App has ended: a signal now waits for the next App
+	// instead of being taken by the old one.
+	signals <- syscall.SIGTERM
+	time.Sleep(200 * time.Millisecond)
+	if len(signals) != 1 {
+		t.Error("the failed App still receives signals")
+	}
 }
 
 func TestSIGTERMStops(t *testing.T) {

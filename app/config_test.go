@@ -150,12 +150,39 @@ func TestValidationRules(t *testing.T) {
 			"devices:\n  pv: { bus: lan, unitId: 1, gateway: { unitId: 31 } }\nlisten:\n  rtu: { baudRate: 19200 }\n", "port must not be empty"},
 		"two buses on one port": { // extends the buses of validBase
 			"  other:\n    type: rtu\n    timeout: 1s\n    rtu: { port: /dev/ttyUSB0 }\n", "use the same connection"},
+		"bus without timeout": {
+			"  other:\n    type: tcp\n    tcp: { host: 192.168.1.11 }\n", "timeout must be > 0"},
+		"parity": {
+			"  other:\n    type: rtu\n    timeout: 1s\n    rtu: { port: /dev/ttyUSB1, parity: X }\n", "parity must be N, E or O"},
+		"stopBits": {
+			"  other:\n    type: rtu\n    timeout: 1s\n    rtu: { port: /dev/ttyUSB1, stopBits: 3 }\n", "stopBits must be 1 or 2"},
+		"env": {
+			"env: test\n", "invalid environment"},
+		"negative cacheTTL": {
+			"devices:\n  a: { bus: rs485, unitId: 1, cacheTTL: -1s }\n", "cacheTTL must not be negative"},
+		"gateway unitId 0": {
+			"devices:\n  a: { bus: rs485, unitId: 1, gateway: { unitId: 0 } }\n", "gateway.unitId must be 1-247"},
+		"gateway unitId 248": {
+			"devices:\n  a: { bus: rs485, unitId: 1, gateway: { unitId: 248 } }\n", "gateway.unitId must be 1-247"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := load(t, tc.content); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("err = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestValidateWebPort(t *testing.T) {
+	for _, port := range []int{0, 65536} {
+		cfg, err := LoadConfig(writeConfig(t, validBase))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.Webserver.ListenPort = port
+		if err = cfg.Validate(); err == nil || !strings.Contains(err.Error(), "invalid port") {
+			t.Errorf("listenPort %d: err = %v, want invalid port", port, err)
+		}
 	}
 }
 

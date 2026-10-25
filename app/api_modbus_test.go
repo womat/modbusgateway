@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -13,7 +15,9 @@ import (
 	"strings"
 	"testing"
 
+	simonmodbus "github.com/simonvetter/modbus"
 	"github.com/womat/mbserver"
+	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
 // newTestApp starts a Modbus TCP device and returns an App with the devices "meter" (unit 1,
@@ -106,6 +110,19 @@ func TestRESTStatusCodes(t *testing.T) {
 	}
 	if code, resp := request(t, h, http.MethodGet, "/devices/meter/holding-registers/0xFFFF?quantity=2", ""); code != http.StatusBadRequest {
 		t.Errorf("range past 0xFFFF: %d %v, want 400", code, resp)
+	}
+	// The Modbus limits, checked by the manager for REST and the listeners alike.
+	for _, path := range []string{
+		"/devices/meter/holding-registers/0?quantity=0",
+		"/devices/meter/holding-registers/0?quantity=126",
+		"/devices/meter/coils/0?quantity=2001",
+	} {
+		if code, resp := request(t, h, http.MethodGet, path, ""); code != http.StatusBadRequest {
+			t.Errorf("GET %s: %d %v, want 400", path, code, resp)
+		}
+	}
+	if code, resp := request(t, h, http.MethodPut, "/devices/pump/coils/0", `{"values":[`+strings.Repeat("true,", 1968)+`true]}`); code != http.StatusBadRequest {
+		t.Errorf("1969 coils: %d %v, want 400", code, resp)
 	}
 }
 
@@ -218,5 +235,29 @@ func TestActivity(t *testing.T) {
 	_, status := request(t, h, http.MethodGet, "/devices/pump/status", "")
 	if status["cacheTTL"] != float64(60) || status["gateway"] != nil {
 		t.Errorf("status = %v, want cacheTTL 60 and no gateway (no listener)", status)
+	}
+}
+
+// TestStatusForModbusError: every manager error maps to its status, also when wrapped; what the
+// gateway cannot name is a failure of the device.
+func TestStatusForModbusError(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want int
+	}{
+		{modbusmanager.ErrLengthMustBeGreaterThanZero, http.StatusBadRequest},
+		{modbusmanager.ErrAddressOutOfRange, http.StatusBadRequest},
+		{modbusmanager.ErrValuesExceedRegisterLimit, http.StatusBadRequest},
+		{modbusmanager.ErrDeviceNotConfigured, http.StatusNotFound},
+		{modbusmanager.ErrFunctionNotAllowed, http.StatusForbidden},
+		{modbusmanager.ErrBusBusy, http.StatusServiceUnavailable},
+		{modbusmanager.ErrQueueTimeout, http.StatusGatewayTimeout},
+		{simonmodbus.ErrIllegalDataAddress, http.StatusBadGateway},
+		{simonmodbus.ErrRequestTimedOut, http.StatusBadGateway},
+		{errors.New("connection refused"), http.StatusBadGateway},
+	} {
+		if got := statusForModbusError(fmt.Errorf("read device %q: %w", "meter", tc.err)); got != tc.want {
+			t.Errorf("%v: status %d, want %d", tc.err, got, tc.want)
+		}
 	}
 }
