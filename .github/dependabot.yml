@@ -14,8 +14,9 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     commit-message:
-      # Matches the "type() description" convention the release changelog groups on.
-      prefix: "chore()"
+      # "chore(deps): …", the "type(scope): description" convention the release changelog
+      # groups on.
+      prefix: "chore(deps)"
     groups:
       golang-x:
         patterns:
@@ -26,7 +27,7 @@ updates:
     schedule:
       interval: weekly
     commit-message:
-      prefix: "chore()"
+      prefix: "chore(deps)"
     groups:
       actions:
         patterns:
