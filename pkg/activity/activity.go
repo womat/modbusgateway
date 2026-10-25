@@ -123,7 +123,7 @@ func (r *Recorder) Record(t Transaction) {
 		if len(r.clients) >= MaxClients {
 			r.evictQuietest()
 		}
-		c = &client{Client: Client{Source: t.Source, Address: t.Client, FirstAt: t.Time}, targets: map[Target]bool{}}
+		c = &client{Source: t.Source, Address: t.Client, FirstAt: t.Time, targets: map[Target]bool{}}
 		r.clients[key] = c
 	}
 	c.LastAt = t.Time
