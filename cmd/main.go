@@ -190,6 +190,7 @@ func run(configFile string, debug bool) int {
 	}
 }
 
+// About returns the application details for --about as YAML.
 func About() string {
 	info := map[string]string{
 		"Author":   "Wolfgang Mathe",

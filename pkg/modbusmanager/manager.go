@@ -18,6 +18,7 @@ import (
 	"time"
 )
 
+// Errors of the manager, its registrations and the checks before a request reaches the bus.
 var (
 	ErrManagerNotInitialized   = errors.New("modbus manager is not initialized")
 	ErrManagerClosed           = errors.New("modbus manager is closed")

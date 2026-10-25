@@ -26,6 +26,7 @@ const (
 // Source is the entry a request came through.
 type Source string
 
+// The sources of a request.
 const (
 	SourceREST Source = "rest" // the REST API
 	SourceTCP  Source = "tcp"  // the Modbus TCP listener

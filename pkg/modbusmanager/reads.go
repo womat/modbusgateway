@@ -9,6 +9,7 @@ import (
 	simonmodbus "github.com/simonvetter/modbus"
 )
 
+// Errors of a read quantity outside the Modbus limits; see IsValidationError.
 var (
 	ErrLengthMustBeGreaterThanZero = errors.New("length must be greater than 0")
 	ErrLengthExceedsBitLimit       = errors.New("length exceeds bit read limit")

@@ -13,6 +13,7 @@ import (
 	simonmodbus "github.com/simonvetter/modbus"
 )
 
+// Errors of the bus: a full or stalled queue, and a bus configuration the client cannot use.
 var (
 	ErrBusBusy                  = errors.New("bus queue is full")
 	ErrQueueTimeout             = errors.New("request waited too long in the bus queue")

@@ -1,13 +1,10 @@
 # systemd unit for modbusgateway.
 #
-#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin modbusgateway
-#   sudo usermod -aG dialout modbusgateway
-#   sudo install -d -o root -g root -m 0755 /opt/modbusgateway /opt/modbusgateway/bin
-#   sudo install -d -o root -g modbusgateway -m 0750 /opt/modbusgateway/etc
-#   sudo install -o root -g root -m 0755 modbusgateway /opt/modbusgateway/bin/modbusgateway
-#   sudo install -o root -g modbusgateway -m 0640 config/config.yaml /opt/modbusgateway/etc/config.yaml
-#   sudo cp contrib/modbusgateway.service /etc/systemd/system/
-#   sudo /opt/modbusgateway/bin/modbusgateway token add browser
+# Install it as in the Quick start of README.md - user, root-owned /opt/modbusgateway,
+# config, certificate and tokens there - then:
+#
+#   sudo install -m 644 contrib/modbusgateway.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
 #   sudo systemctl enable --now modbusgateway
 #
 # Everything under /opt/modbusgateway belongs to root; the group modbusgateway may only

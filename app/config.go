@@ -21,8 +21,10 @@ import (
 )
 
 const (
+	// ProdEnv refuses to start without certFile.
 	ProdEnv = "prod"
-	DevEnv  = "dev"
+	// DevEnv falls back to the embedded development certificate.
+	DevEnv = "dev"
 
 	// defaultListenTCPPort is the Modbus TCP port of the gateway; not 502, so it does not
 	// collide with a device on the same host and needs no privileges.

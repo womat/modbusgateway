@@ -23,6 +23,7 @@ import (
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
+// Errors of Start.
 var (
 	ErrNoGatewayDevicesConfigured = errors.New("no gateway devices configured")
 	ErrServerAlreadyRunning       = errors.New("modbus server is already running")

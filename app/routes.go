@@ -1,5 +1,4 @@
-// Package app sets up HTTP routes and middleware for the application.
-// It supports authentication, Swagger documentation (dev only), and monitoring endpoints.
+// HTTP routes and middleware of the application.
 // Routes:
 // - Public routes without authentication (e.g., version)
 // - Protected routes requiring a bearer token from the token file
@@ -10,8 +9,10 @@
 // Middleware applied:
 // - CORS
 // - IP filtering (allowed/blocked IPs)
+// - an access log naming the caller
 //
-// This must be called during app startup before starting the HTTP server.
+// SetupRoutes must be called during app startup before starting the HTTP server.
+
 package app
 
 import (

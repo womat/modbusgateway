@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// Errors of a number of values outside the Modbus limits; see IsValidationError.
 var (
 	ErrValuesEmpty               = errors.New("values must not be empty")
 	ErrValuesExceedCoilLimit     = errors.New("values exceed coil write limit")

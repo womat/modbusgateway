@@ -10,6 +10,7 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
+// PathSwagger is where the Swagger UI is served in a build with -tags swagger.
 const PathSwagger = "/swagger/"
 
 func (app *App) registerSwaggerRoute(mux *http.ServeMux) {

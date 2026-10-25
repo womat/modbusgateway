@@ -9,6 +9,7 @@ import (
 // Class groups the outcomes of a request.
 type Class string
 
+// The classes of an outcome.
 const (
 	ClassOK        Class = "ok"        // answered over the bus
 	ClassCache     Class = "cache"     // answered from the cache, without a bus transaction

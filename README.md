@@ -72,7 +72,7 @@ No cloud, no database, no runtime: a single binary, configured with one YAML fil
 | `linux_arm64`  | Pi 3 / 4 / 5 / 400 / Zero 2 W with a 64-bit OS        |
 
 ```sh
-VERSION=3.0.1 ARCH=armv6        # see the release page for the latest version
+VERSION=3.0.2 ARCH=armv6        # see the release page for the latest version
 BASE=https://github.com/womat/modbusgateway/releases/download/v$VERSION
 curl -LO $BASE/modbusgateway_${VERSION}_linux_$ARCH.tar.gz -LO $BASE/checksums.txt
 sha256sum -c checksums.txt --ignore-missing
@@ -318,8 +318,9 @@ curl -k -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/j
 
 - **Listeners and clients**: one group per listener - REST, Modbus TCP, Modbus RTU - with its
   clients by IP address, their requests per minute, error share and the devices they asked. A
-  client stays listed until 10 minutes after its last Modbus request, at most 8 per listener; REST
-  counts calls of `/devices/…` only. The Modbus RTU listener is a fixed line and always shown; a
+  client stays listed until 10 minutes after its last Modbus request; the first 8 per listener are
+  shown, the rest behind *+ N more*, at most 32 clients in all. REST counts calls of `/devices/…`
+  only. The Modbus RTU listener is a fixed line and always shown; a
   serial line carries no client address, so its row names the devices asked.
 - **Gateway, buses and devices**: every listener feeds the gateway, which queues each request on
   the bus of the addressed device. A bus shows its transactions per second, mean duration, timeouts
@@ -519,11 +520,14 @@ A reload never leaves the devices unreachable:
   is rolled back: everything the failed start opened is released, and the gateway starts again with
   the previous configuration (`Start with the new configuration failed, continuing with the previous
   one`).
-- A web server that stops on its own restarts the gateway with the current configuration.
+- A web server that stops on its own restarts the gateway with the configuration file as it is
+  then; a file that does not load or validate falls back to the running configuration.
 
-Only a configuration that fails on the very first start ends the process, with exit code 78; the
-unit does not restart it then (`RestartPreventExitStatus=78`), and `systemctl status modbusgateway`
-shows why.
+A configuration that does not load or validate at the very first start ends the process with exit
+code 78; the unit does not restart it then (`RestartPreventExitStatus=78`), and `systemctl status
+modbusgateway` shows why. A valid configuration that cannot start the first time - a missing
+certificate, a port or a serial line in use - ends it with exit code 1, and the unit tries again
+every 5 s.
 
 ---
 

@@ -17,12 +17,14 @@ import (
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
+// Errors of a write body; each is answered with 400.
 var (
 	ErrMissingRequestBody   = errors.New("missing request body")
 	ErrRequestBodyNotSingle = errors.New("request body must contain a single JSON object")
 	ErrValueXorValues       = errors.New(`request body needs either "value" (single write) or "values" (multiple write)`)
 )
 
+// ModbusErrorResponse is the body of every error answer of the Modbus endpoints.
 type ModbusErrorResponse struct {
 	Error string `json:"error"`
 }

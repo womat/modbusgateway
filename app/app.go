@@ -3,11 +3,11 @@
 // It registers the Modbus buses and devices, starts the Modbus listeners and the HTTPS API,
 // and handles OS signals for graceful shutdowns or restarts.
 //
-// Usage:
+// Usage, as in cmd/main.go:
 //
-//	config := LoadConfig()
-//	app := app.New(config, "/opt/modbusgateway")
-//	app.Run()
+//	config, err := app.LoadConfig(file) // then config.Validate()
+//	a, err := app.New(config, signals, checkReload).Run()
+//	<-a.Restart() or <-a.Shutdown()
 package app
 
 import (
@@ -37,9 +37,12 @@ import (
 var VERSION = "dev"
 
 const (
+	// MODULE is the application name, used in paths, logs and the --about output.
 	MODULE = "modbusgateway"
 
-	ModeStop    = 0
+	// ModeStop makes shutdownProcedure end the process after the cleanup.
+	ModeStop = 0
+	// ModeRestart makes shutdownProcedure start a new App after the cleanup.
 	ModeRestart = 1
 )
 
