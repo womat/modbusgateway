@@ -16,7 +16,7 @@ make build_arm7        # Pi 2/3/4/5, 32-bit OS
 make build_arm64       # Pi 3/4/5/400/Zero2, 64-bit OS
 make build_arm6_dev    # + Swagger UI (-tags swagger); _dev variants exist per arch
 make test              # go test -race ./...
-make lint              # gofmt, go vet, golangci-lint, govulncheck - for $(PI_ARCH), with and without -tags swagger
+make lint              # gofmt, go fix -diff, go mod tidy -diff, go vet, golangci-lint, govulncheck - for $(PI_ARCH), with and without -tags swagger
 make deploy            # build for $(PI_ARCH) then scp to $(PI_USER)@$(PI_HOST)
 make clean
 ```
@@ -33,7 +33,7 @@ Tests need no hardware: Modbus devices are emulated with an mbserver on a free l
 
 Versioning is SemVer and the Git tag is the single source of truth. `.github/workflows/release.yml` runs `goreleaser release --clean`, which builds linux arm64/armv7/armv6 and publishes a GitHub release with checksums and a grouped changelog. `.goreleaser.yaml`'s `before` hook must keep running `make ensure_dev_certs` (GoReleaser calls `go build` directly), and archives must keep shipping `README.md` (third-party license overview), `LICENSE` (MIT) and `contrib/modbusgateway.service`, the sandboxed unit the README installs (root-owned `/opt/modbusgateway`, nothing writable, no capabilities, `DeviceAllow=/dev/ttyS0`, `RestartPreventExitStatus=78`). When adding a dependency, update the license table in `README.md`.
 
-`.github/workflows/ci.yml` runs on every push/PR against `main`: a `test` job (native, with socat, `make test`) and a `build` matrix over `PI_ARCH` arm6/arm7/arm64 that runs `make lint` and `make build_<arch> build_<arch>_dev`; `release.yml` runs `make test` and `make lint` before GoReleaser. The job sets no `GOOS`/`GOARCH` of its own, or `make lint` would build the analysers for arm. All actions are pinned to a commit SHA with the release in a comment, `govulncheck` and `golangci-lint` to a version in the Makefile only; `.github/dependabot.yml` updates actions and Go modules weekly, but not the `go install` pins.
+`.github/workflows/ci.yml` runs on every push/PR against `main`, weekly (Monday 05:17 UTC) and by hand; `setup-go` takes the Go version from `go.mod` with `check-latest`, so the weekly run catches a toolchain advisory without a commit. It has a `test` job (native, with socat, `make test`) and a `build` matrix over `PI_ARCH` arm6/arm7/arm64 that runs `make lint` and `make build_<arch> build_<arch>_dev`; `release.yml` runs `make test` and `make lint` before GoReleaser. The job sets no `GOOS`/`GOARCH` of its own, or `make lint` would build the analysers for arm. All actions are pinned to a commit SHA with the release in a comment, `govulncheck` and `golangci-lint` to a version in the Makefile only; `.github/dependabot.yml` updates actions (`chore(ci)`) and Go modules (`chore(deps)`, Swagger in a group of its own) weekly, but not the `go install` pins.
 
 `PI_USER`/`PI_HOST`/`PI_PATH` default to placeholders; the actual device comes from environment variables or, project-specific, from `Makefile.local` (gitignored, pulled in via `-include`). Real host names, addresses and the production configuration stay out of this public repository. **`PI_ARCH` defaults to `arm6`**: it runs on every Pi in 32-bit mode, and a Pi Zero (1st gen) is ARMv6 only. `make deploy` is the development loop (binary reports a `-dirty` version), `make deploy_release TAG=vX.Y.Z` downloads, verifies and copies a published release.
 

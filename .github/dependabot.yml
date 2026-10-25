@@ -18,16 +18,26 @@ updates:
       # groups on.
       prefix: "chore(deps)"
     groups:
-      golang-x:
+      # The Swagger UI is only built with -tags swagger and drags in a large graph
+      # of its own; its updates never touch the released binary.
+      swagger:
         patterns:
-          - "golang.org/x/*"
+          - "github.com/swaggo/*"
+          - "github.com/go-openapi/*"
+      everything-else:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "github.com/swaggo/*"
+          - "github.com/go-openapi/*"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     commit-message:
-      prefix: "chore(deps)"
+      # "chore(ci): …" - an action only changes the workflows, not the binary.
+      prefix: "chore(ci)"
     groups:
       actions:
         patterns:

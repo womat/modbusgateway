@@ -1,17 +1,32 @@
-# Test, vet, lint and build on every push and pull request.
+# Continuous integration for github.com/womat/modbusgateway.
 #
-# Actions are pinned to a commit SHA, with the release it belongs to in a
-# comment; dependabot (.github/dependabot.yml) proposes updates.
-name: ci
+# Actions are pinned to a commit SHA, with the release in a comment: a tag like
+# @v7 can be moved to other code, a SHA cannot. dependabot (.github/dependabot.yml)
+# proposes updates for them.
+#
+# setup-go takes the version from go.mod but the newest patch of it (check-latest),
+# and the weekly run repeats govulncheck without a change here: an advisory against
+# the Go toolchain or a dependency appears between commits, and dependabot does not
+# report the toolchain.
+
+name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# A new push to the same ref supersedes a run still in flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # The tests run natively on the runner (linux/amd64): arm test binaries could
@@ -25,6 +40,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          check-latest: true
           cache: true
 
       - name: Install socat
@@ -33,8 +49,8 @@ jobs:
       - name: Test with race detector
         run: make test
 
-  # The same checks as `make lint` locally, for each released target: gofmt, go vet,
-  # golangci-lint and govulncheck, with and without the Swagger UI. The analysers are
+  # The same checks as `make lint` locally, for each released target: gofmt, go fix,
+  # go mod tidy, go vet, golangci-lint and govulncheck, with and without the Swagger UI. The analysers are
   # pinned in the Makefile only; make installs them for the runner and runs them against
   # the target, so the job sets no GOOS/GOARCH of its own (a tool built for arm would not
   # start on the runner).
@@ -53,6 +69,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          check-latest: true
           cache: true
 
       # govulncheck exits non-zero only when this code calls a vulnerable symbol;
