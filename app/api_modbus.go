@@ -53,22 +53,10 @@ type ModbusWriteRegistersRequest struct {
 //	@Security		BearerAuth
 //	@Success		200	{array}		modbusclient.DeviceStatusResponse	"Device status list"
 //	@Failure		401	{string}	string								"Unauthorized"
-//	@Failure		503	{object}	ModbusErrorResponse					"Modbus service unavailable"
 //	@Router			/devices [get]
 func (app *App) HandleModbusListDeviceStatus() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
-		resp, err := app.modbusClient.ListDeviceStatus()
-		if err != nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: err.Error()})
-			return
-		}
-
-		web.Encode(w, http.StatusOK, resp)
+		web.Encode(w, http.StatusOK, app.modbusClient.ListDeviceStatus())
 	})
 }
 
@@ -83,15 +71,9 @@ func (app *App) HandleModbusListDeviceStatus() http.Handler {
 //	@Success		200		{object}	modbusclient.DeviceStatusResponse	"Device status"
 //	@Failure		401		{string}	string								"Unauthorized"
 //	@Failure		404		{object}	ModbusErrorResponse					"Device not found"
-//	@Failure		503		{object}	ModbusErrorResponse					"Modbus service unavailable"
 //	@Router			/devices/{device}/status [get]
 func (app *App) HandleModbusGetDeviceStatus() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
 		device := r.PathValue("device")
 		if device == "" {
 			web.Encode(w, http.StatusBadRequest, ModbusErrorResponse{Error: "missing device path parameter"})
@@ -321,11 +303,6 @@ func parseModbusUint16(value string) (uint16, error) {
 func (app *App) handleReadBits(fc uint8, read func(modbusclient.ReadBitsRequest) (modbusclient.ReadBitsResponse, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
 		device, register, ok := parseDeviceRegisterPath(w, r)
 		if !ok {
 			return
@@ -356,11 +333,6 @@ func (app *App) handleReadBits(fc uint8, read func(modbusclient.ReadBitsRequest)
 func (app *App) handleReadRegisters(fc uint8, read func(modbusclient.ReadRegistersRequest) (modbusclient.ReadRegistersResponse, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
 		device, register, ok := parseDeviceRegisterPath(w, r)
 		if !ok {
 			return
@@ -416,11 +388,6 @@ type writeCall struct {
 func (app *App) handleWrite(decode func(device string, register uint16, r *http.Request) (writeCall, error)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		if app.modbusClient == nil {
-			web.Encode(w, http.StatusServiceUnavailable, ModbusErrorResponse{Error: "modbus service is not initialized"})
-			return
-		}
-
 		device, register, ok := parseDeviceRegisterPath(w, r)
 		if !ok {
 			return

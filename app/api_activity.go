@@ -147,17 +147,15 @@ func (app *App) activitySnapshot() ActivityResponse {
 		resp.Clients = append(resp.Clients, out)
 	}
 
-	if app.modbusMgr != nil {
-		for _, b := range app.modbusMgr.BusStatus() {
-			out := BusActivity{
-				Name: b.Name, Type: b.Type, Address: b.Address, Connected: b.Connected, LastConnectAt: formatTime(b.LastConnectAt),
-				QueueLen: b.QueueLen, QueueSize: b.QueueSize, Transactions: b.Transactions, Errors: b.Errors, Timeouts: b.Timeouts,
-			}
-			if b.Transactions > 0 {
-				out.MeanDuration = b.BusyTime.Seconds() / float64(b.Transactions)
-			}
-			resp.Buses = append(resp.Buses, out)
+	for _, b := range app.modbusMgr.BusStatus() {
+		out := BusActivity{
+			Name: b.Name, Type: b.Type, Address: b.Address, Connected: b.Connected, LastConnectAt: formatTime(b.LastConnectAt),
+			QueueLen: b.QueueLen, QueueSize: b.QueueSize, Transactions: b.Transactions, Errors: b.Errors, Timeouts: b.Timeouts,
 		}
+		if b.Transactions > 0 {
+			out.MeanDuration = b.BusyTime.Seconds() / float64(b.Transactions)
+		}
+		resp.Buses = append(resp.Buses, out)
 	}
 
 	for _, t := range app.activity.Recent() {

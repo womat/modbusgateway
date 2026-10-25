@@ -76,12 +76,6 @@ const docTemplate = `{
                         "schema": {
                             "type": "string"
                         }
-                    },
-                    "503": {
-                        "description": "Modbus service unavailable",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
                     }
                 }
             }
@@ -671,12 +665,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Device not found",
-                        "schema": {
-                            "$ref": "#/definitions/app.ModbusErrorResponse"
-                        }
-                    },
-                    "503": {
-                        "description": "Modbus service unavailable",
                         "schema": {
                             "$ref": "#/definitions/app.ModbusErrorResponse"
                         }

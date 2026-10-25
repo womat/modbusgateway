@@ -20,7 +20,6 @@ import (
 
 // Errors of the manager, its registrations and the checks before a request reaches the bus.
 var (
-	ErrManagerNotInitialized   = errors.New("modbus manager is not initialized")
 	ErrManagerClosed           = errors.New("modbus manager is closed")
 	ErrDeviceNameEmpty         = errors.New("device name must not be empty")
 	ErrDeviceAlreadyRegistered = errors.New("device is already registered")

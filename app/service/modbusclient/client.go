@@ -216,9 +216,6 @@ func (s *Service) WriteMultipleRegisters(req WriteMultipleRegistersRequest) (Wri
 
 // GetDeviceStatus returns the current status for one configured device.
 func (s *Service) GetDeviceStatus(name string) (DeviceStatusResponse, error) {
-	if s.manager == nil {
-		return DeviceStatusResponse{}, modbusmanager.ErrManagerNotInitialized
-	}
 	if name == "" {
 		return DeviceStatusResponse{}, modbusmanager.ErrDeviceNameEmpty
 	}
@@ -232,18 +229,14 @@ func (s *Service) GetDeviceStatus(name string) (DeviceStatusResponse, error) {
 }
 
 // ListDeviceStatus returns the current status for all configured devices.
-func (s *Service) ListDeviceStatus() ([]DeviceStatusResponse, error) {
-	if s.manager == nil {
-		return nil, modbusmanager.ErrManagerNotInitialized
-	}
-
+func (s *Service) ListDeviceStatus() []DeviceStatusResponse {
 	statuses := s.manager.ListStatus()
 	resp := make([]DeviceStatusResponse, 0, len(statuses))
 	for _, status := range statuses {
 		resp = append(resp, s.mapStatus(status))
 	}
 
-	return resp, nil
+	return resp
 }
 
 func mapReadBitsResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte, values []bool, cached bool) ReadBitsResponse {

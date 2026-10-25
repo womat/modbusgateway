@@ -124,9 +124,6 @@ func hostOf(addr net.Addr) string {
 
 // Start begins accepting requests.
 func (s *Server) Start(ctx context.Context) error {
-	if s.manager == nil {
-		return modbusmanager.ErrManagerNotInitialized
-	}
 	if len(s.devices) == 0 {
 		return ErrNoGatewayDevicesConfigured
 	}

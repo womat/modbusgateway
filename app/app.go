@@ -174,10 +174,6 @@ func (app *App) Init() (err error) {
 
 // Start starts runtime services after Init completed successfully.
 func (app *App) Start() error {
-	if app.modbusMgr == nil {
-		return modbusmanager.ErrManagerNotInitialized
-	}
-
 	for bus, err := range app.modbusMgr.Connect() {
 		slog.Warn("Initial Modbus connect failed; will retry on the next request", "bus", bus, "error", err)
 	}
