@@ -305,6 +305,27 @@ func TestWriteInvalidatesTheCache(t *testing.T) {
 	}
 }
 
+// TestFailedWriteInvalidatesTheCache: a write the device refused may still have changed some
+// registers, so the cached values go either way.
+func TestFailedWriteInvalidatesTheCache(t *testing.T) {
+	fake := newFakeClient()
+	m := newTestManager(t, fake, BusConfig{},
+		DeviceConfig{Name: "heatpump", UnitId: 3, CacheTTL: time.Hour, Functions: allFunctions})
+
+	if _, err := m.ReadHoldingRegisters("heatpump", 0, 10); err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	fake.failNext = simonmodbus.ErrServerDeviceFailure
+	fake.mu.Unlock()
+	if _, err := m.WriteMultipleRegisters("heatpump", 4, []uint16{1, 2}); !errors.Is(err, simonmodbus.ErrServerDeviceFailure) {
+		t.Fatalf("write: err = %v, want the exception of the device", err)
+	}
+	if after, err := m.ReadHoldingRegisters("heatpump", 0, 10); err != nil || after.Cached {
+		t.Errorf("read after a failed write: cached = %v, err = %v; want a fresh read", after.Cached, err)
+	}
+}
+
 func TestWritesBeforeReadsAndInOrder(t *testing.T) {
 	fake := newFakeClient()
 	fake.gate = make(chan struct{})
