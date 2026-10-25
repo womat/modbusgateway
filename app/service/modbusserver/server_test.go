@@ -275,6 +275,32 @@ func TestMalformedRequestData(t *testing.T) {
 	}
 }
 
+// TestRangePastLastAddress: a range beyond 0xFFFF is answered with IllegalDataAddress, as the
+// Modbus specification asks, without reaching the bus.
+func TestRangePastLastAddress(t *testing.T) {
+	m := modbusmanager.New()
+	t.Cleanup(func() { _ = m.Close() })
+	if err := m.RegisterBus(modbusmanager.BusConfig{
+		Name: "lan", Type: "tcp", Timeout: 500 * time.Millisecond,
+		TCP: &modbusmanager.TCPConfig{Host: "127.0.0.1", Port: freePort(t)}, // nothing listens there
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Register(modbusmanager.DeviceConfig{Name: "x", Bus: "lan", UnitId: 1, Functions: []uint8{3}}); err != nil {
+		t.Fatal(err)
+	}
+	h := &handler{manager: m, devices: map[uint8]string{1: "x"}}
+
+	frame := &mbserver.TCPFrame{UnitId: 1, Function: 3}
+	frame.SetData([]byte{0xFF, 0xFF, 0, 2})
+	if _, ex := h.readHoldingRegisters(nil, frame); ex != mbserver.IllegalDataAddress {
+		t.Errorf("exception = %v, want IllegalDataAddress", ex)
+	}
+	if n := m.BusStatus()[0].Transactions; n != 0 {
+		t.Errorf("%d bus transactions, want 0", n)
+	}
+}
+
 func TestAddressAndQuantity(t *testing.T) {
 	frame := &mbserver.TCPFrame{UnitId: 1, Function: 3}
 	data := make([]byte, 4)

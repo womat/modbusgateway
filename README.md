@@ -276,7 +276,7 @@ Errors are returned as `{"error": "..."}`:
 
 | Status | Reason                                                     |
 |--------|------------------------------------------------------------|
-| 400    | invalid request, e.g. quantity 0 or above the Modbus limit, or a write body with neither or both of `value` and `values` |
+| 400    | invalid request, e.g. quantity 0 or above the Modbus limit, a range that ends beyond address `0xFFFF`, or a write body with neither or both of `value` and `values` |
 | 403    | the function code is not in `functions` of the device      |
 | 404    | the device is not configured                               |
 | 502    | the device answered with an exception or did not answer    |
@@ -353,7 +353,8 @@ turn it off.
   Modbus specification); USB adapters and the Raspberry Pi UART need 20-40 ms.
 
 Function codes FC1-FC6, FC15 and FC16 are forwarded, limited by `functions` of the device; anything
-else is answered with exception 1. A request for an unknown unit ID is answered with exception 11
+else is answered with exception 1, a range that ends beyond address `0xFFFF` with exception 2,
+without reaching the bus. A request for an unknown unit ID is answered with exception 11
 over TCP and not at all over RTU, where another server on the line may own it. Broadcasts (unit
 ID 0) are dropped, so a write cannot reach every device at once.
 

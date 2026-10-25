@@ -32,7 +32,18 @@ var (
 	ErrFunctionNotAllowed      = errors.New("function code is not allowed for this device")
 	ErrUnsupportedFunction     = errors.New("unsupported function code")
 	ErrInvalidRequest          = errors.New("malformed request") // for callers that decode requests themselves
+	ErrAddressOutOfRange       = errors.New("range ends beyond address 0xFFFF")
 )
+
+// checkRange returns ErrAddressOutOfRange when length addresses from register run past 0xFFFF.
+// The client library refuses such a request without a transaction; caught here, it is a
+// rejected request instead of a transport error that would reconnect the bus.
+func checkRange(register, length uint16) error {
+	if int(register)+int(length) > 0x10000 {
+		return fmt.Errorf("%w: %d addresses from 0x%04X", ErrAddressOutOfRange, length, register)
+	}
+	return nil
+}
 
 // DefaultFunctions are the function codes a device allows when its configuration names none:
 // reading only.

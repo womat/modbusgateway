@@ -44,10 +44,11 @@ func IsTimeout(err error) bool {
 	return errors.Is(err, simonmodbus.ErrRequestTimedOut)
 }
 
-// IsValidationError reports whether err rejects the request itself: a malformed request, or a
-// quantity or a number of values outside the Modbus limits.
+// IsValidationError reports whether err rejects the request itself: a malformed request, a
+// quantity or a number of values outside the Modbus limits, or a range past 0xFFFF.
 func IsValidationError(err error) bool {
 	return errors.Is(err, ErrInvalidRequest) ||
+		errors.Is(err, ErrAddressOutOfRange) ||
 		errors.Is(err, ErrLengthMustBeGreaterThanZero) ||
 		errors.Is(err, ErrLengthExceedsBitLimit) ||
 		errors.Is(err, ErrLengthExceedsRegisterLimit) ||

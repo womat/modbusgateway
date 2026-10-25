@@ -62,6 +62,9 @@ func (m *Manager) WriteMultipleCoils(deviceName string, register uint16, values 
 	if len(values) > maxWriteCoils {
 		return WriteResult{}, fmt.Errorf("%w: max=%d", ErrValuesExceedCoilLimit, maxWriteCoils)
 	}
+	if err := checkRange(register, uint16(len(values))); err != nil {
+		return WriteResult{}, err
+	}
 
 	length := uint16(len(values))
 	duration, d, err := m.write(deviceName, 15, coils, register, length, func(c busClient) error {
@@ -80,6 +83,9 @@ func (m *Manager) WriteMultipleRegisters(deviceName string, register uint16, val
 	}
 	if len(values) > maxWriteRegisters {
 		return WriteResult{}, fmt.Errorf("%w: max=%d", ErrValuesExceedRegisterLimit, maxWriteRegisters)
+	}
+	if err := checkRange(register, uint16(len(values))); err != nil {
+		return WriteResult{}, err
 	}
 
 	length := uint16(len(values))

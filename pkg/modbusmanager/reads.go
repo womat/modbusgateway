@@ -77,6 +77,9 @@ func (m *Manager) readBits(deviceName string, fc uint8, kind regType, register, 
 	if length > maxReadBits {
 		return ReadBitsResult{}, fmt.Errorf("%w: max=%d", ErrLengthExceedsBitLimit, maxReadBits)
 	}
+	if err := checkRange(register, length); err != nil {
+		return ReadBitsResult{}, err
+	}
 
 	values, cached, duration, d, err := read(m, deviceName, fc, kind, register, length, func(c busClient) (any, error) {
 		return op(c)
@@ -103,6 +106,9 @@ func (m *Manager) readRegisters(deviceName string, fc uint8, kind regType, regis
 	}
 	if length > maxReadRegisters {
 		return ReadRegistersResult{}, fmt.Errorf("%w: max=%d", ErrLengthExceedsRegisterLimit, maxReadRegisters)
+	}
+	if err := checkRange(register, length); err != nil {
+		return ReadRegistersResult{}, err
 	}
 
 	values, cached, duration, d, err := read(m, deviceName, fc, kind, register, length, func(c busClient) (any, error) {

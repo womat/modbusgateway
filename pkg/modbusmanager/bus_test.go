@@ -427,6 +427,35 @@ func TestFunctionNotAllowed(t *testing.T) {
 	}
 }
 
+// TestRangePastLastAddress: a range that ends beyond 0xFFFF is refused before the bus - the
+// client library rejects it too, and taken for a transport error it would cost a reconnect.
+func TestRangePastLastAddress(t *testing.T) {
+	fake := newFakeClient()
+	m := newTestManager(t, fake, BusConfig{}, DeviceConfig{Name: "pump", UnitId: 2, Functions: allFunctions})
+
+	for name, call := range map[string]func() error{
+		"FC1":  func() error { _, err := m.ReadCoils("pump", 0xFFF0, 17); return err },
+		"FC3":  func() error { _, err := m.ReadHoldingRegisters("pump", 0xFFFF, 2); return err },
+		"FC15": func() error { _, err := m.WriteMultipleCoils("pump", 0xFFFF, []bool{true, true}); return err },
+		"FC16": func() error { _, err := m.WriteMultipleRegisters("pump", 0xFFFF, []uint16{1, 2}); return err },
+	} {
+		if err := call(); !errors.Is(err, ErrAddressOutOfRange) || !IsValidationError(err) {
+			t.Errorf("%s past 0xFFFF: err = %v, want ErrAddressOutOfRange", name, err)
+		}
+	}
+	if n := fake.calls.Load(); n != 0 {
+		t.Errorf("%d transactions for refused ranges, want 0", n)
+	}
+
+	// The last address itself is fine.
+	if _, err := m.ReadHoldingRegisters("pump", 0xFFFF, 1); err != nil {
+		t.Errorf("read of 0xFFFF: %v", err)
+	}
+	if _, err := m.WriteMultipleRegisters("pump", 0xFFFE, []uint16{1, 2}); err != nil {
+		t.Errorf("write of 0xFFFE-0xFFFF: %v", err)
+	}
+}
+
 func TestDevicesShareABus(t *testing.T) {
 	fake := newFakeClient()
 	m := newTestManager(t, fake, BusConfig{},

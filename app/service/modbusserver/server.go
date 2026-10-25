@@ -456,6 +456,8 @@ func exception(err error) mbserver.Exception {
 	switch {
 	case errors.Is(err, modbusmanager.ErrFunctionNotAllowed):
 		return mbserver.IllegalFunction
+	case errors.Is(err, modbusmanager.ErrAddressOutOfRange):
+		return mbserver.IllegalDataAddress
 	case modbusmanager.IsValidationError(err):
 		return mbserver.IllegalDataValue
 	case errors.Is(err, modbusmanager.ErrDeviceNotConfigured):

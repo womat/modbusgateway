@@ -104,6 +104,9 @@ func TestRESTStatusCodes(t *testing.T) {
 	if code, resp := request(t, h, http.MethodGet, "/devices/nope/holding-registers/0", ""); code != http.StatusNotFound {
 		t.Errorf("unknown device: %d %v, want 404", code, resp)
 	}
+	if code, resp := request(t, h, http.MethodGet, "/devices/meter/holding-registers/0xFFFF?quantity=2", ""); code != http.StatusBadRequest {
+		t.Errorf("range past 0xFFFF: %d %v, want 400", code, resp)
+	}
 }
 
 func TestRESTStatus(t *testing.T) {
