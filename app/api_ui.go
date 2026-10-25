@@ -1,7 +1,7 @@
 package app
 
 // The web page at GET /: a single HTML file embedded in the binary. It is public because it
-// contains no data; its script asks for the API key and reads /health, /devices and /activity.
+// contains no data; its script asks for a bearer token and reads /health, /devices and /activity.
 
 import (
 	_ "embed"

@@ -375,8 +375,8 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8p
     <form class="keybox" id="keyform">
       <h2>modbusgateway</h2>
       <p id="keyerr" class="err" hidden>The token was rejected. Check webserver.tokenFile on the Pi.</p>
-      <label for="apikey" class="label">Token</label>
-      <input id="apikey" type="password" autocomplete="current-password" placeholder="modbusgateway token add browser" required>
+      <label for="token" class="label">Token</label>
+      <input id="token" type="password" autocomplete="current-password" placeholder="modbusgateway token add browser" required>
       <p>Stored in this browser only and sent as a bearer token.</p>
       <button type="submit">Connect</button>
     </form>
@@ -505,7 +505,7 @@ footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8p
 <script>
 "use strict";
 const POLL_MS = 2000;
-const KEY = "modbusgateway.apiKey";
+const KEY = "modbusgateway.token";
 const FOLD = "modbusgateway.logOpen";
 const MAX_FLASHES = 12;  // per poll and LED, so a busy LED blinks instead of flickering
 const PER_LISTENER = 8;  // clients shown per listener before "+ N more"
@@ -514,7 +514,7 @@ const $ = id => document.getElementById(id);
 
 const KIND = { rest: "REST", tcp: "Modbus TCP", rtu: "Modbus RTU" };
 
-let apiKey = load(KEY);
+let token = load(KEY);
 let timer = null;
 let lastOk = null;            // time of the last successful poll
 let data = null;              // { health, devices, activity } of the last poll
@@ -822,10 +822,10 @@ function showLogin(rejected) {
   $("main").hidden = true;
   $("login").hidden = false;
   $("keyerr").hidden = !rejected;
-  $("apikey").value = "";
-  $("apikey").focus();
+  $("token").value = "";
+  $("token").focus();
 }
-function signedOut(rejected) { apiKey = ""; store(KEY, ""); showLogin(rejected); }
+function signedOut(rejected) { token = ""; store(KEY, ""); showLogin(rejected); }
 
 function stale(reason) {
   $("banner").textContent = reason + (lastOk ? ` The values below are from ${hms(lastOk)}.` : "");
@@ -837,7 +837,7 @@ function stale(reason) {
 }
 
 async function get(path) {
-  const r = await fetch(path, { headers: { "Authorization": "Bearer " + apiKey }, cache: "no-store" });
+  const r = await fetch(path, { headers: { "Authorization": "Bearer " + token }, cache: "no-store" });
   if (r.status === 401) throw Object.assign(new Error("unauthorized"), { auth: true });
   if (!r.ok) {
     let msg = `${path} answered ${r.status}`;
@@ -881,9 +881,9 @@ function stop() { clearInterval(timer); timer = null; }
 // ---- Events ---------------------------------------------------------------------------------
 $("keyform").addEventListener("submit", e => {
   e.preventDefault();
-  apiKey = $("apikey").value.trim();
-  if (!apiKey) return;
-  store(KEY, apiKey);
+  token = $("token").value.trim();
+  if (!token) return;
+  store(KEY, token);
   start();
 });
 $("signout").addEventListener("click", () => signedOut(false));
@@ -941,12 +941,12 @@ document.addEventListener("keydown", ev => {
 });
 // Poll only while the page is visible.
 document.addEventListener("visibilitychange", () => {
-  if (!apiKey) return;
+  if (!token) return;
   if (document.hidden) stop(); else start();
 });
 
 applyFold();
-if (apiKey) start(); else showLogin(false);
+if (token) start(); else showLogin(false);
 </script>
 </body>
 </html>

@@ -10,13 +10,13 @@ import (
 func TestWebPage(t *testing.T) {
 	_, h := newTestApp(t)
 
-	// Without an API key: the page holds no data.
+	// Without a token: the page holds no data.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<title>modbusgateway</title>") {
-		t.Fatalf("GET / = %d, want the web page without an API key", rec.Code)
+		t.Fatalf("GET / = %d, want the web page without a token", rec.Code)
 	}
 	if csp := rec.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "connect-src 'self'") {
 		t.Errorf("Content-Security-Policy = %q, want requests limited to this server", csp)
