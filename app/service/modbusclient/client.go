@@ -10,42 +10,42 @@ import (
 	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
-// ReadBitsRequest contains the validated parameters for a FC1 or FC2 read.
+// ReadBitsRequest contains the parameters of a FC1 or FC2 read.
 type ReadBitsRequest struct {
 	Device   string
 	Register uint16
 	Length   uint16
 }
 
-// ReadRegistersRequest contains the validated parameters for a FC3 or FC4 read.
+// ReadRegistersRequest contains the parameters of a FC3 or FC4 read.
 type ReadRegistersRequest struct {
 	Device   string
 	Register uint16
 	Length   uint16
 }
 
-// WriteSingleCoilRequest contains the validated parameters for a FC5 write.
+// WriteSingleCoilRequest contains the parameters of a FC5 write.
 type WriteSingleCoilRequest struct {
 	Device   string
 	Register uint16
 	Value    bool
 }
 
-// WriteSingleRegisterRequest contains the validated parameters for a FC6 write.
+// WriteSingleRegisterRequest contains the parameters of a FC6 write.
 type WriteSingleRegisterRequest struct {
 	Device   string
 	Register uint16
 	Value    uint16
 }
 
-// WriteMultipleCoilsRequest contains the validated parameters for a FC15 write.
+// WriteMultipleCoilsRequest contains the parameters of a FC15 write.
 type WriteMultipleCoilsRequest struct {
 	Device   string
 	Register uint16
 	Values   []bool
 }
 
-// WriteMultipleRegistersRequest contains the validated parameters for a FC16 write.
+// WriteMultipleRegistersRequest contains the parameters of a FC16 write.
 type WriteMultipleRegistersRequest struct {
 	Device   string
 	Register uint16
@@ -134,12 +134,8 @@ func New(manager *modbusmanager.Manager, gateways map[string]Gateway) *Service {
 	return &Service{manager: manager, gateways: gateways}
 }
 
-// ReadCoils validates the request shape and executes a Modbus FC1 read via the manager.
+// ReadCoils executes a Modbus FC1 read via the manager.
 func (s *Service) ReadCoils(req ReadBitsRequest) (ReadBitsResponse, error) {
-	if err := validateReadBitsRequest(req); err != nil {
-		return ReadBitsResponse{}, err
-	}
-
 	result, err := s.manager.ReadCoils(req.Device, req.Register, req.Length)
 	if err != nil {
 		return ReadBitsResponse{}, err
@@ -148,12 +144,8 @@ func (s *Service) ReadCoils(req ReadBitsRequest) (ReadBitsResponse, error) {
 	return mapReadBitsResponse(result.Device, result.Duration, 1, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
-// ReadDiscreteInputs validates the request shape and executes a Modbus FC2 read via the manager.
+// ReadDiscreteInputs executes a Modbus FC2 read via the manager.
 func (s *Service) ReadDiscreteInputs(req ReadBitsRequest) (ReadBitsResponse, error) {
-	if err := validateReadBitsRequest(req); err != nil {
-		return ReadBitsResponse{}, err
-	}
-
 	result, err := s.manager.ReadDiscreteInputs(req.Device, req.Register, req.Length)
 	if err != nil {
 		return ReadBitsResponse{}, err
@@ -162,12 +154,8 @@ func (s *Service) ReadDiscreteInputs(req ReadBitsRequest) (ReadBitsResponse, err
 	return mapReadBitsResponse(result.Device, result.Duration, 2, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
-// ReadHoldingRegisters validates the request shape and executes a Modbus FC3 read via the manager.
+// ReadHoldingRegisters executes a Modbus FC3 read via the manager.
 func (s *Service) ReadHoldingRegisters(req ReadRegistersRequest) (ReadRegistersResponse, error) {
-	if err := validateReadRegistersRequest(req); err != nil {
-		return ReadRegistersResponse{}, err
-	}
-
 	result, err := s.manager.ReadHoldingRegisters(req.Device, req.Register, req.Length)
 	if err != nil {
 		return ReadRegistersResponse{}, err
@@ -176,12 +164,8 @@ func (s *Service) ReadHoldingRegisters(req ReadRegistersRequest) (ReadRegistersR
 	return mapReadRegistersResponse(result.Device, result.Duration, 3, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
-// ReadInputRegisters validates the request shape and executes a Modbus FC4 read via the manager.
+// ReadInputRegisters executes a Modbus FC4 read via the manager.
 func (s *Service) ReadInputRegisters(req ReadRegistersRequest) (ReadRegistersResponse, error) {
-	if err := validateReadRegistersRequest(req); err != nil {
-		return ReadRegistersResponse{}, err
-	}
-
 	result, err := s.manager.ReadInputRegisters(req.Device, req.Register, req.Length)
 	if err != nil {
 		return ReadRegistersResponse{}, err
@@ -190,12 +174,8 @@ func (s *Service) ReadInputRegisters(req ReadRegistersRequest) (ReadRegistersRes
 	return mapReadRegistersResponse(result.Device, result.Duration, 4, result.Register, result.Length, result.Data, result.Values, result.Cached), nil
 }
 
-// WriteSingleCoil validates the request shape and executes a Modbus FC5 write via the manager.
+// WriteSingleCoil executes a Modbus FC5 write via the manager.
 func (s *Service) WriteSingleCoil(req WriteSingleCoilRequest) (WriteResponse, error) {
-	if err := validateWriteSingleCoilRequest(req); err != nil {
-		return WriteResponse{}, err
-	}
-
 	result, err := s.manager.WriteSingleCoil(req.Device, req.Register, req.Value)
 	if err != nil {
 		return WriteResponse{}, err
@@ -204,12 +184,8 @@ func (s *Service) WriteSingleCoil(req WriteSingleCoilRequest) (WriteResponse, er
 	return mapWriteResponse(result.Device, result.Duration, 5, result.Register, result.Length, result.Data), nil
 }
 
-// WriteSingleRegister validates the request shape and executes a Modbus FC6 write via the manager.
+// WriteSingleRegister executes a Modbus FC6 write via the manager.
 func (s *Service) WriteSingleRegister(req WriteSingleRegisterRequest) (WriteResponse, error) {
-	if err := validateWriteSingleRegisterRequest(req); err != nil {
-		return WriteResponse{}, err
-	}
-
 	result, err := s.manager.WriteSingleRegister(req.Device, req.Register, req.Value)
 	if err != nil {
 		return WriteResponse{}, err
@@ -218,12 +194,8 @@ func (s *Service) WriteSingleRegister(req WriteSingleRegisterRequest) (WriteResp
 	return mapWriteResponse(result.Device, result.Duration, 6, result.Register, result.Length, result.Data), nil
 }
 
-// WriteMultipleCoils validates the request shape and executes a Modbus FC15 write via the manager.
+// WriteMultipleCoils executes a Modbus FC15 write via the manager.
 func (s *Service) WriteMultipleCoils(req WriteMultipleCoilsRequest) (WriteResponse, error) {
-	if err := validateWriteMultipleCoilsRequest(req); err != nil {
-		return WriteResponse{}, err
-	}
-
 	result, err := s.manager.WriteMultipleCoils(req.Device, req.Register, req.Values)
 	if err != nil {
 		return WriteResponse{}, err
@@ -232,12 +204,8 @@ func (s *Service) WriteMultipleCoils(req WriteMultipleCoilsRequest) (WriteRespon
 	return mapWriteResponse(result.Device, result.Duration, 15, result.Register, result.Length, result.Data), nil
 }
 
-// WriteMultipleRegisters validates the request shape and executes a Modbus FC16 write via the manager.
+// WriteMultipleRegisters executes a Modbus FC16 write via the manager.
 func (s *Service) WriteMultipleRegisters(req WriteMultipleRegistersRequest) (WriteResponse, error) {
-	if err := validateWriteMultipleRegistersRequest(req); err != nil {
-		return WriteResponse{}, err
-	}
-
 	result, err := s.manager.WriteMultipleRegisters(req.Device, req.Register, req.Values)
 	if err != nil {
 		return WriteResponse{}, err
@@ -276,78 +244,6 @@ func (s *Service) ListDeviceStatus() ([]DeviceStatusResponse, error) {
 	}
 
 	return resp, nil
-}
-
-func validateReadBitsRequest(req ReadBitsRequest) error {
-	if req.Device == "" {
-		return modbusmanager.ErrDeviceNameEmpty
-	}
-	if req.Length == 0 {
-		return modbusmanager.ErrLengthMustBeGreaterThanZero
-	}
-	if req.Length > 2000 {
-		return fmt.Errorf("%w: max=%d", modbusmanager.ErrLengthExceedsBitLimit, 2000)
-	}
-
-	return nil
-}
-
-func validateReadRegistersRequest(req ReadRegistersRequest) error {
-	if req.Device == "" {
-		return modbusmanager.ErrDeviceNameEmpty
-	}
-	if req.Length == 0 {
-		return modbusmanager.ErrLengthMustBeGreaterThanZero
-	}
-	if req.Length > 125 {
-		return fmt.Errorf("%w: max=%d", modbusmanager.ErrLengthExceedsRegisterLimit, 125)
-	}
-
-	return nil
-}
-
-func validateWriteSingleCoilRequest(req WriteSingleCoilRequest) error {
-	if req.Device == "" {
-		return modbusmanager.ErrDeviceNameEmpty
-	}
-
-	return nil
-}
-
-func validateWriteSingleRegisterRequest(req WriteSingleRegisterRequest) error {
-	if req.Device == "" {
-		return modbusmanager.ErrDeviceNameEmpty
-	}
-
-	return nil
-}
-
-func validateWriteMultipleCoilsRequest(req WriteMultipleCoilsRequest) error {
-	if req.Device == "" {
-		return modbusmanager.ErrDeviceNameEmpty
-	}
-	if len(req.Values) == 0 {
-		return modbusmanager.ErrValuesEmpty
-	}
-	if len(req.Values) > 1968 {
-		return fmt.Errorf("%w: max=%d", modbusmanager.ErrValuesExceedCoilLimit, 1968)
-	}
-
-	return nil
-}
-
-func validateWriteMultipleRegistersRequest(req WriteMultipleRegistersRequest) error {
-	if req.Device == "" {
-		return modbusmanager.ErrDeviceNameEmpty
-	}
-	if len(req.Values) == 0 {
-		return modbusmanager.ErrValuesEmpty
-	}
-	if len(req.Values) > 123 {
-		return fmt.Errorf("%w: max=%d", modbusmanager.ErrValuesExceedRegisterLimit, 123)
-	}
-
-	return nil
 }
 
 func mapReadBitsResponse(device modbusmanager.DeviceStatus, duration time.Duration, functionCode uint8, register, length uint16, data []byte, values []bool, cached bool) ReadBitsResponse {
