@@ -89,7 +89,4 @@ func TestOutcome(t *testing.T) {
 			t.Errorf("Outcome(%v, %v) = %q, %q; want %q, %q", tc.err, tc.cached, result, class, tc.result, tc.class)
 		}
 	}
-	if !ClassTimeout.OnBus() || ClassCache.OnBus() || ClassRejected.OnBus() {
-		t.Error("OnBus: want timeout on the bus, cache and rejected not")
-	}
 }

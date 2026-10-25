@@ -18,12 +18,8 @@ const (
 	ClassRejected  Class = "rejected"  // the gateway refused the request before the bus
 )
 
-// OnBus reports whether a request of this class was executed on the bus.
-func (c Class) OnBus() bool {
-	return c == ClassOK || c == ClassException || c == ClassTimeout || c == ClassError
-}
-
-// exceptionNames are the device exceptions, named as in the Modbus specification.
+// exceptionNames are the errors simonvetter returns for an exception response of the device,
+// named as in the Modbus specification.
 var exceptionNames = []struct {
 	err  error
 	name string

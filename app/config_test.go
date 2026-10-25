@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/womat/modbusgateway/pkg/modbusmanager"
 )
 
 // writeConfig writes content to a temporary config file, with a token file "token-hashes" next to it
@@ -91,8 +93,8 @@ devices:
 	if rtu := cfg.Buses["rs485"].RTU; rtu.BaudRate != 9600 || rtu.DataBits != 8 || rtu.Parity != "N" || rtu.StopBits != 1 {
 		t.Errorf("rtu defaults = %+v, want 9600 8N1", rtu)
 	}
-	if cfg.Buses["lan"].TCP.Port != 502 || cfg.Buses["lan"].QueueSize != defaultQueueSize {
-		t.Errorf("tcp bus = %+v, want port 502 and queue size %d", cfg.Buses["lan"], defaultQueueSize)
+	if cfg.Buses["lan"].TCP.Port != 502 || cfg.Buses["lan"].QueueSize != modbusmanager.DefaultQueueSize {
+		t.Errorf("tcp bus = %+v, want port 502 and queue size %d", cfg.Buses["lan"], modbusmanager.DefaultQueueSize)
 	}
 	if !slices.Equal(cfg.Devices["meter"].Functions, defaultFunctionCodes) {
 		t.Errorf("functions = %v, want the default %v", cfg.Devices["meter"].Functions, defaultFunctionCodes)

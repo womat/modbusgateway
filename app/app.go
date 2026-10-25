@@ -43,7 +43,6 @@ const (
 	ModeRestart = 1
 )
 
-// App is the main application struct.
 // App is where the application is wired up.
 type App struct {
 	wg            sync.WaitGroup // wait group to track running webserver
@@ -60,8 +59,6 @@ type App struct {
 	shutdown      chan struct{}      // signals application shutdown
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
-
-	// add your additional handler here
 }
 
 // New initializes the App struct but does not start services.
@@ -129,19 +126,20 @@ func (app *App) Run() (*App, error) {
 // Init prepares the application:
 // - initializes services and runtime objects
 // - initializes API routes
+//
+// A failed Init leaves the manager open; Run releases it through abort, other callers with
+// Cleanup.
 func (app *App) Init() (err error) {
 
 	// Register the buses first, then the devices on them, before serving requests.
 	app.modbusMgr = modbusmanager.New()
 	for _, name := range sortedKeys(app.config.Buses) {
 		if err := app.modbusMgr.RegisterBus(mapBusConfig(name, app.config.Buses[name])); err != nil {
-			_ = app.modbusMgr.Close()
 			return fmt.Errorf("register modbus bus %q: %w", name, err)
 		}
 	}
 	for _, name := range sortedKeys(app.config.Devices) {
 		if err := app.modbusMgr.Register(mapDeviceConfig(name, app.config.Devices[name])); err != nil {
-			_ = app.modbusMgr.Close()
 			return fmt.Errorf("register modbus device %q: %w", name, err)
 		}
 	}
@@ -154,7 +152,6 @@ func (app *App) Init() (err error) {
 		}
 		devices, err := app.config.GatewayDevices(listener)
 		if err != nil {
-			_ = app.modbusMgr.Close()
 			return err
 		}
 		for unitId, name := range devices {

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/womat/golib/v2/web"
+	"github.com/womat/modbusgateway/pkg/modbusmanager"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,8 +27,6 @@ const (
 	// defaultListenTCPPort is the Modbus TCP port of the gateway; not 502, so it does not
 	// collide with a device on the same host and needs no privileges.
 	defaultListenTCPPort = 1502
-	// defaultQueueSize is the number of requests that may wait on a bus.
-	defaultQueueSize = 64
 	// defaultRTUCacheTTL is how long a read of a serial device stays in the cache; TCP devices
 	// are not cached unless configured.
 	defaultRTUCacheTTL = time.Second
@@ -147,16 +146,6 @@ func (f *FunctionCode) UnmarshalYAML(node *yaml.Node) error {
 		}
 	}
 	return fmt.Errorf("line %d: invalid function code %q, must be one of %v", node.Line, node.Value, supportedFunctionCodes)
-}
-
-// MarshalYAML writes the function code as FC3.
-func (f FunctionCode) MarshalYAML() (any, error) {
-	return f.String(), nil
-}
-
-// MarshalText writes the function code as FC3, e.g. in JSON.
-func (f FunctionCode) MarshalText() ([]byte, error) {
-	return []byte(f.String()), nil
 }
 
 // NewConfig returns a Config with sane defaults
@@ -286,11 +275,6 @@ func renamedKeyHint(err error) string {
 	return hint.String()
 }
 
-// IsDevEnv returns true if the environment is development.
-func (c *Config) IsDevEnv() bool {
-	return c.Env == DevEnv
-}
-
 // Validate checks the Config for invalid or missing values and applies the defaults of the
 // buses, devices and listeners.
 func (c *Config) Validate() error {
@@ -331,7 +315,7 @@ func (c *Config) validateBuses() error {
 		bus := c.Buses[name]
 		bus.Type = strings.ToLower(bus.Type)
 		if bus.QueueSize == 0 {
-			bus.QueueSize = defaultQueueSize
+			bus.QueueSize = modbusmanager.DefaultQueueSize
 		}
 
 		var endpoint string
@@ -512,10 +496,8 @@ func (c *Config) Warnings() []string {
 		if device.Gateway == nil {
 			continue
 		}
-		listener := "tcp"
-		if c.Buses[device.Bus].Type == "tcp" {
-			listener = "rtu"
-		}
+		// The pairing is symmetric: the listener of a bus type is its other transport.
+		listener := otherTransport(c.Buses[device.Bus].Type)
 		if !c.listenerActive(listener) {
 			warnings = append(warnings, fmt.Sprintf("device %q has a gateway block, but listen.%s is not configured; it is offered on the REST API only", name, listener))
 		}

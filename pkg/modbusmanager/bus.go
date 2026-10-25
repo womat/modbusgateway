@@ -421,24 +421,11 @@ func (b *bus) address() string {
 	return ""
 }
 
-// modbusExceptions are the errors simonvetter returns for an exception response.
-var modbusExceptions = []error{
-	simonmodbus.ErrIllegalFunction,
-	simonmodbus.ErrIllegalDataAddress,
-	simonmodbus.ErrIllegalDataValue,
-	simonmodbus.ErrServerDeviceFailure,
-	simonmodbus.ErrAcknowledge,
-	simonmodbus.ErrServerDeviceBusy,
-	simonmodbus.ErrMemoryParityError,
-	simonmodbus.ErrGWPathUnavailable,
-	simonmodbus.ErrGWTargetFailedToRespond,
-}
-
 // isModbusException reports whether err is an exception response of the device rather than a
 // transport error.
 func isModbusException(err error) bool {
-	for _, exception := range modbusExceptions {
-		if errors.Is(err, exception) {
+	for _, e := range exceptionNames {
+		if errors.Is(err, e.err) {
 			return true
 		}
 	}
