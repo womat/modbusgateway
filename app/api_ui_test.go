@@ -22,9 +22,30 @@ func TestWebPage(t *testing.T) {
 		t.Errorf("Content-Security-Policy = %q, want requests limited to this server", csp)
 	}
 
-	// The page must not catch unknown paths.
-	if code, _ := request(t, h, http.MethodGet, "/nonexistent", ""); code == http.StatusOK {
-		t.Errorf("GET /nonexistent = %d, want an error", code)
+	// The page must not catch unknown paths. No "OPTIONS /" route (WithCORS answers preflights),
+	// so an unknown path is a 404, not 405.
+	if code, _ := request(t, h, http.MethodGet, "/nonexistent", ""); code != http.StatusNotFound {
+		t.Errorf("GET /nonexistent = %d, want 404", code)
+	}
+}
+
+// A preflight needs no token and advertises the methods the API serves only.
+func TestCORSAdvertisesUsedMethodsOnly(t *testing.T) {
+	_, h := newTestApp(t)
+
+	// A preflight is an OPTIONS request with Access-Control-Request-Method; WithCORS answers it
+	// before auth and the mux.
+	req := httptest.NewRequest(http.MethodOptions, "/devices/pump/holding-registers/0", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Access-Control-Request-Method", http.MethodPut)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("preflight OPTIONS /devices/pump/holding-registers/0 = %d, want 204 without a token", rec.Code)
+	}
+	if got, want := rec.Header().Get("Access-Control-Allow-Methods"), "GET, PUT, OPTIONS"; got != want {
+		t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, want)
 	}
 }
 

@@ -28,9 +28,6 @@ func (app *App) SetupRoutes() {
 
 	mux := http.NewServeMux()
 
-	// Preflight CORS requests
-	mux.Handle("OPTIONS /", web.HandlePreflight())
-
 	// Dev-only Swagger documentation (only registered with -tags swagger)
 	app.registerSwaggerRoute(mux)
 
@@ -57,7 +54,8 @@ func (app *App) SetupRoutes() {
 
 	// Apply global middleware: CORS + IP filter
 	// CORS advertises only the methods the API serves: GET for reads, PUT for writes and the
-	// preflight OPTIONS.
+	// preflight OPTIONS. WithCORS answers a preflight itself, before auth; an "OPTIONS /" route
+	// is not needed and would turn the mux's 404 for an unknown path into 405.
 	handler := web.WithCORS(mux, web.WithAllowedMethods(http.MethodGet, http.MethodPut, http.MethodOptions))
 	handler = web.WithIPFilter(handler, app.config.Webserver.AllowedIPs, app.config.Webserver.BlockedIPs)
 	// One entry per request with client and caller. Node-RED and the web page poll every few
